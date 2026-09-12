@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Host A Drop</title>
+<meta name="description" content="Hosts bring the group and take 3% of drop volume — QUORUM's entire marketing budget, paid to the people already recommending things for free.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231f2e5c'/%3E%3Cpath d='M7 9h18v3H7zm0 6h12v3H7zm0 6h15v3H7z' fill='%23e4e5dc'/%3E%3Ccircle cx='24' cy='22' r='5' fill='%23d8452f'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Archivo:wght@400;500;600&family=Courier+Prime:wght@400;700&display=swap">
+<link rel="stylesheet" href="css/quorum.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap masthead__bar">
+    <a class="wordmark" href="index.html">Quorum <small>Local 001</small></a>
+    <nav class="mast-nav" aria-label="Main">
+      <a href="index.html">Union</a>
+      <a href="drops.html">Drop board</a>
+      <a href="receipts.html">Receipts</a>
+      <a href="hosts.html" aria-current="page">Host a drop</a>
+      <a href="index.html#join">Get a card</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap hero__grid">
+      <div>
+        <p class="eyebrow">Host program · 3% of volume</p>
+        <h1 style="font-size:var(--step-3)">Your group chat is already a purchasing department. It just isn't getting paid.</h1>
+        <p class="lede" style="margin-top:1rem">You recommend things constantly and a brand's ad
+          budget captures the value. Hosting inverts that: you bring the group, the group's size
+          sets the price, and three of our eight points come to you.</p>
+        <div class="hero__cta">
+          <a class="btn btn--stamp" href="#apply">Apply to host</a>
+          <a class="btn btn--ghost" href="#terms">Payout terms</a>
+        </div>
+      </div>
+
+      <!-- earnings calculator -->
+      <div class="ballot" data-calc>
+        <div class="ballot__head">
+          <div>
+            <div class="ballot__brand">Estimator</div>
+            <h3 class="ballot__item">What one drop pays</h3>
+          </div>
+          <span class="stamp stamp--wait">Your numbers</span>
+        </div>
+
+        <div class="form">
+          <div>
+            <label class="dial__hint" for="calc-audience">People you can actually reach</label>
+            <input id="calc-audience" type="number" min="0" step="100" value="24000" inputmode="numeric">
+          </div>
+          <div class="form__row">
+            <div style="flex:1 1 8rem">
+              <label class="dial__hint" for="calc-convert">% who join the drop</label>
+              <input id="calc-convert" type="number" min="0" max="100" step="0.1" value="2.5" inputmode="decimal">
+            </div>
+            <div style="flex:1 1 8rem">
+              <label class="dial__hint" for="calc-basket">Member price of the item</label>
+              <input id="calc-basket" type="number" min="0" step="1" value="34" inputmode="numeric">
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid--3" style="gap:1rem">
+          <div class="tile"><span class="k">Members in</span><span class="v" data-calc-buyers>600</span></div>
+          <div class="tile"><span class="k">Drop volume</span><span class="v" data-calc-gmv>$20,400</span></div>
+          <div class="tile" style="border-top-color:var(--stamp)"><span class="k red">You are paid</span><span class="v red" data-calc-pay>$612</span></div>
+        </div>
+        <p class="form__note">3% of cleared volume, paid 14 days after the drop ships. A 2.5% join
+          rate is the median across our 312 cleared drops; niche groups routinely beat 8%.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== HOW HOSTING WORKS ========================== -->
+  <section class="section">
+    <div class="wrap split split--lead">
+      <div>
+        <p class="eyebrow">The sequence</p>
+        <h2>Four things to do, once</h2>
+        <p class="lede" style="margin-top:1rem">There is no content calendar and no posting quota.
+          A drop is one link and one deadline.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <h4>Tell us what your group would actually buy</h4>
+          <p>Not a category — an item. "My server would buy a heavyweight blank tee at $25" is a
+            brief we can take to three mills by Friday.</p>
+        </div>
+        <div class="step">
+          <h4>We pair you with a brand and agree the ladder</h4>
+          <p>You see the cost sheet before anyone else does. If the tiers look unreachable for your
+            group, say so — you know your people better than we do.</p>
+        </div>
+        <div class="step">
+          <h4>Post one link</h4>
+          <p>No affiliate disclosure gymnastics: the card says you're the host and shows your 3% as
+            a line on the receipt. Your group sees exactly what you make.</p>
+        </div>
+        <div class="step">
+          <h4>Get paid on volume, not clicks</h4>
+          <p>If the drop misses quorum you're paid nothing and so are we. Aligned by construction,
+            not by contract.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== WHO HOSTS WELL ============================= -->
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Cleared drops · a sample</p>
+        <h2>The best hosts are rarely the biggest</h2>
+        <p class="lede">A tight group with a shared problem converts several times better than a
+          large audience with nothing in common. These are real shapes from our board.</p>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Host</th><th class="num">Reach</th><th class="num">Joined</th>
+              <th class="num">Rate</th><th class="num">Volume</th><th class="num">Paid</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Ceramics night class, Leeds</td><td class="num">44</td><td class="num">31</td><td class="num">70.5%</td><td class="num">$1,023</td><td class="num">$31</td></tr>
+            <tr><td>Bouldering gym group chat</td><td class="num">310</td><td class="num">96</td><td class="num">31.0%</td><td class="num">$5,568</td><td class="num">$167</td></tr>
+            <tr><td>University run club</td><td class="num">1,200</td><td class="num">241</td><td class="num">20.1%</td><td class="num">$6,266</td><td class="num">$188</td></tr>
+            <tr><td>Audio-nerd Discord</td><td class="num">8,400</td><td class="num">1,104</td><td class="num">13.1%</td><td class="num">$43,056</td><td class="num">$1,292</td></tr>
+            <tr><td>Vintage-denim creator</td><td class="num">86,000</td><td class="num">212</td><td class="num">0.2%</td><td class="num">$19,504</td><td class="num">$585</td></tr>
+            <tr><td>Fit-check creator, 1.1M</td><td class="num">1,100,000</td><td class="num">452</td><td class="num">0.04%</td><td class="num">$21,244</td><td class="num">$637</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="form__note" style="margin-top:0.9rem">The ceramics class earned $31 and cleared a
+        drop at 70% join rate. The 1.1M-follower account earned more in absolute terms and converted
+        at four ten-thousandths. We pay both the same 3% — we just stopped pretending reach is the
+        useful number.</p>
+    </div>
+  </section>
+
+  <!-- ===================== TERMS ====================================== -->
+  <section class="section" id="terms">
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow">Payout terms</p>
+        <h2>Nine lines, no addendum</h2>
+        <div class="table-scroll" style="margin-top:1.4rem">
+          <table>
+            <thead><tr><th>Term</th><th>What it is</th></tr></thead>
+            <tbody>
+              <tr><td>Rate</td><td>3% of cleared drop volume</td></tr>
+              <tr><td>Taken from</td><td>Our 8% — never added to member price</td></tr>
+              <tr><td>Paid</td><td>14 days after the drop ships</td></tr>
+              <tr><td>Minimum payout</td><td>None. $31 is a real payout we've made.</td></tr>
+              <tr><td>Missed quorum</td><td>$0 to you, $0 to us</td></tr>
+              <tr><td>Returns</td><td>Deducted at the same 3% if the unit comes back</td></tr>
+              <tr><td>Exclusivity</td><td>None. Host elsewhere, sell elsewhere.</td></tr>
+              <tr><td>Disclosure</td><td>Your share is printed on the member receipt</td></tr>
+              <tr><td>Leaving</td><td>Between drops, no notice</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div id="pairing">
+        <p class="eyebrow">Pairing</p>
+        <h2>Brands and hosts get matched by the item, not the follower count</h2>
+        <p style="margin-top:1rem;color:var(--ink-soft)">We keep a standing brief list from hosts —
+          what their groups have said out loud they'd buy — and take it to makers. When a mill can
+          hold a price at 300 units, we already know which four groups want it. That list is the
+          only proprietary thing here, and it was written by members.</p>
+
+        <div class="callout" style="margin-top:1.6rem" id="apply">
+          <p class="eyebrow eyebrow--plain mono">Host application</p>
+          <h3>Tell us what your group would buy</h3>
+          <form class="form" data-waitlist>
+            <div class="form__row">
+              <label class="dial__hint" for="host-email" style="flex:1 1 100%">Email</label>
+              <input id="host-email" type="email" required placeholder="you@wherever.com" autocomplete="email">
+            </div>
+            <div class="form__row">
+              <label class="dial__hint" for="host-group" style="flex:1 1 100%">Your group, and the one thing it would buy</label>
+              <input id="host-group" type="text" placeholder="Bouldering gym chat, 310 — heavyweight crewneck at $40">
+            </div>
+            <div class="form__row"><button class="btn btn--stamp" type="submit">Send it</button></div>
+            <p class="form__note">Prototype — nothing is sent anywhere, and there's no server behind
+              this form yet.</p>
+            <p class="form__ok" data-waitlist-ok role="status" aria-live="polite"></p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot__grid">
+      <div>
+        <a class="wordmark" href="index.html">Quorum <small>Local 001</small></a>
+        <p class="form__note" style="margin-top:0.8rem;max-width:24ch">A buyers' union for people
+          who were already deciding together.</p>
+      </div>
+      <div>
+        <h5>The union</h5>
+        <ul>
+          <li><a href="drops.html">Drop board</a></li>
+          <li><a href="receipts.html">Published receipts</a></li>
+          <li><a href="hosts.html">Host a drop</a></li>
+          <li><a href="index.html#bylaws">Bylaws</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Brands</h5>
+        <ul>
+          <li><a href="receipts.html#terms">Deal terms</a></li>
+          <li><a href="receipts.html#economics">Where the 8% goes</a></li>
+          <li><a href="hosts.html#pairing">Get paired with a host</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5>Small print</h5>
+        <ul>
+          <li><a href="index.html#faq">Quorum &amp; refunds</a></li>
+          <li><a href="index.html#faq">Returns</a></li>
+          <li><a href="index.html#join">Member card</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="smallprint">
+      <p><strong>Concept build.</strong> QUORUM is a business concept and this site is its
+        prototype. The brands, drops, member counts and payouts shown here are illustrative — no
+        goods are for sale and no payment is processed anywhere on this site.</p>
+      <p>Union blue · stamp red · bulletin stock. Set in Big Shoulders Display, Archivo and
+        Courier Prime.</p>
+    </div>
+  </div>
+</footer>
+<script src="js/quorum.js"></script>
+</body>
+</html>

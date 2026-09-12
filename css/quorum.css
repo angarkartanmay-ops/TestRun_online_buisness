@@ -1,0 +1,395 @@
+/* ==========================================================================
+   QUORUM — a buyers' union
+   Visual register: two-colour offset print on bulletin stock.
+   Ink 1 = union blue (structure), Ink 2 = stamp red (price movement),
+   Ledger green = quorum met. Paper is grey-green, never warm cream.
+   ========================================================================== */
+
+/* --- tokens: complete light palette lives here, unconditionally ---------- */
+:root {
+  --paper:        #e4e5dc;
+  --stock:        #f1f1ea;
+  --stock-2:      #dcded3;
+  --ink:          #1f2e5c;
+  --ink-soft:     #55618a;
+  --ink-faint:    #8d96b2;
+  --rule:         rgba(31, 46, 92, 0.22);
+  --rule-soft:    rgba(31, 46, 92, 0.11);
+  --stamp:        #d8452f;
+  --stamp-soft:   rgba(216, 69, 47, 0.12);
+  --ledger:       #2f6b4f;
+  --ledger-soft:  rgba(47, 107, 79, 0.14);
+  --shadow:       rgba(31, 46, 92, 0.16);
+
+  --display: "Big Shoulders Display", "Haettenschweiler", "Arial Narrow", sans-serif;
+  --body:    "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --data:    "Courier Prime", ui-monospace, "Courier New", monospace;
+
+  --step--1: clamp(0.72rem, 0.7rem + 0.1vw, 0.78rem);
+  --step-0:  clamp(0.95rem, 0.92rem + 0.15vw, 1.05rem);
+  --step-1:  clamp(1.15rem, 1.05rem + 0.4vw, 1.4rem);
+  --step-2:  clamp(1.5rem, 1.3rem + 0.9vw, 2.1rem);
+  --step-3:  clamp(2.1rem, 1.6rem + 2.2vw, 3.4rem);
+  --step-4:  clamp(2.6rem, 1.5rem + 4.4vw, 5rem);
+
+  --gutter: clamp(1rem, 4vw, 2.5rem);
+  --wrap:   1240px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:       #15171a;
+    --stock:       #1d2024;
+    --stock-2:     #262a30;
+    --ink:         #e7e8e0;
+    --ink-soft:    #a7b0c6;
+    --ink-faint:   #6d768d;
+    --rule:        rgba(231, 232, 224, 0.24);
+    --rule-soft:   rgba(231, 232, 224, 0.11);
+    --stamp:       #ff6f52;
+    --stamp-soft:  rgba(255, 111, 82, 0.16);
+    --ledger:      #62c090;
+    --ledger-soft: rgba(98, 192, 144, 0.16);
+    --shadow:      rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:       #15171a;
+  --stock:       #1d2024;
+  --stock-2:     #262a30;
+  --ink:         #e7e8e0;
+  --ink-soft:    #a7b0c6;
+  --ink-faint:   #6d768d;
+  --rule:        rgba(231, 232, 224, 0.24);
+  --rule-soft:   rgba(231, 232, 224, 0.11);
+  --stamp:       #ff6f52;
+  --stamp-soft:  rgba(255, 111, 82, 0.16);
+  --ledger:      #62c090;
+  --ledger-soft: rgba(98, 192, 144, 0.16);
+  --shadow:      rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+/* --- base --------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: var(--step-0);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-underline-offset: 0.2em;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--display);
+  font-weight: 800;
+  line-height: 0.88;
+  letter-spacing: -0.005em;
+  text-transform: uppercase;
+  text-wrap: balance;
+  margin: 0;
+}
+h1 { font-size: var(--step-4); }
+h2 { font-size: var(--step-3); }
+h3 { font-size: var(--step-2); }
+h4 { font-size: var(--step-1); line-height: 1; }
+
+p { margin: 0; max-width: 62ch; }
+a { color: inherit; }
+ul { margin: 0; padding: 0; list-style: none; }
+strong { font-weight: 600; }
+
+:where(a, button, input, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--stamp);
+  outline-offset: 3px;
+}
+
+.wrap {
+  max-width: var(--wrap);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* --- utility type ------------------------------------------------------- */
+.eyebrow {
+  font-family: var(--data);
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  flex-wrap: wrap;
+}
+.eyebrow::before {
+  content: "";
+  width: 0.55em; height: 0.55em;
+  background: var(--stamp);
+  flex: none;
+}
+.eyebrow--plain::before { display: none; }
+
+.lede { font-size: var(--step-1); line-height: 1.4; color: var(--ink-soft); max-width: 54ch; }
+.mono { font-family: var(--data); font-variant-numeric: tabular-nums; }
+.num  { font-variant-numeric: tabular-nums; }
+.red  { color: var(--stamp); }
+.green { color: var(--ledger); }
+.strike { text-decoration: line-through; text-decoration-thickness: 1px; color: var(--ink-faint); }
+
+/* --- rules & sections --------------------------------------------------- */
+.rule-double {
+  border-top: 3px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  height: 4px;
+}
+.section { padding-block: clamp(3rem, 7vw, 6rem); border-top: 1px solid var(--rule); }
+.section > .wrap > .section-head { margin-bottom: clamp(1.75rem, 4vw, 3rem); display: grid; gap: 0.9rem; }
+
+/* --- masthead ----------------------------------------------------------- */
+.masthead { background: var(--paper); border-bottom: 3px solid var(--ink); position: relative; z-index: 20; }
+.masthead__bar {
+  display: flex; align-items: center; gap: 1rem;
+  padding-block: 0.7rem; flex-wrap: wrap;
+}
+.wordmark {
+  font-family: var(--display); font-weight: 800; text-transform: uppercase;
+  font-size: clamp(1.5rem, 3.4vw, 2.1rem); line-height: 1;
+  letter-spacing: 0.01em; text-decoration: none; display: flex; align-items: baseline; gap: 0.45rem;
+}
+.wordmark small {
+  font-family: var(--data); font-size: 0.6rem; letter-spacing: 0.16em;
+  color: var(--stamp); text-transform: uppercase; font-weight: 400;
+}
+.mast-nav { margin-left: auto; display: flex; align-items: center; gap: clamp(0.75rem, 2vw, 1.6rem); flex-wrap: wrap; }
+.mast-nav a {
+  font-family: var(--data); font-size: var(--step--1); text-transform: uppercase;
+  letter-spacing: 0.1em; text-decoration: none; color: var(--ink-soft); padding-block: 0.2rem;
+  border-bottom: 2px solid transparent;
+}
+.mast-nav a:hover { color: var(--ink); border-bottom-color: var(--stamp); }
+.mast-nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); }
+
+/* --- buttons ------------------------------------------------------------ */
+.btn {
+  font-family: var(--display); text-transform: uppercase; font-weight: 800;
+  font-size: var(--step-1); line-height: 1;
+  padding: 0.62em 1.1em; border: 2px solid var(--ink); background: var(--ink); color: var(--paper);
+  text-decoration: none; display: inline-flex; align-items: center; gap: 0.5em; cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  box-shadow: 4px 4px 0 var(--shadow);
+}
+.btn:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--shadow); }
+.btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--shadow); }
+.btn--ghost { background: transparent; color: var(--ink); }
+.btn--stamp { background: var(--stamp); border-color: var(--stamp); color: #fff; }
+.btn--sm { font-size: var(--step-0); padding: 0.5em 0.9em; box-shadow: 3px 3px 0 var(--shadow); }
+
+/* --- the ticker --------------------------------------------------------- */
+.ticker {
+  border-bottom: 1px solid var(--ink); background: var(--ink); color: var(--paper);
+  overflow: hidden; white-space: nowrap;
+}
+.ticker__track { display: inline-flex; gap: 2.5rem; padding-block: 0.4rem; animation: slide 48s linear infinite; }
+.ticker__track span { font-family: var(--data); font-size: var(--step--1); letter-spacing: 0.08em; text-transform: uppercase; }
+.ticker__track b { color: #ffb3a2; font-weight: 400; }
+@keyframes slide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* --- hero --------------------------------------------------------------- */
+.hero { padding-block: clamp(2.25rem, 5vw, 4.5rem); }
+.hero__grid { display: grid; gap: clamp(2rem, 5vw, 3.5rem); grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 62rem) { .hero__grid { grid-template-columns: 1.05fr 0.95fr; } }
+.hero h1 { margin-block: 0.5rem 1.1rem; }
+.hero h1 em { font-style: normal; color: var(--stamp); }
+.hero__meta { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 1.6rem; padding-top: 1.1rem; border-top: 1px solid var(--rule); }
+.hero__meta div { display: grid; gap: 0.15rem; }
+.hero__meta dt, .hero__meta .k {
+  font-family: var(--data); font-size: var(--step--1); text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--ink-faint);
+}
+.hero__meta .v { font-family: var(--display); font-size: var(--step-2); line-height: 1; font-weight: 800; }
+.hero__cta { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-top: 1.8rem; }
+
+/* --- ballot card (the recurring object) --------------------------------- */
+.ballot {
+  background: var(--stock);
+  border: 1px solid var(--rule);
+  border-top: 2px solid var(--ink);
+  padding: clamp(1.1rem, 2.6vw, 1.6rem);
+  position: relative;
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+.ballot--perf { border-bottom: 2px dashed var(--rule); }
+.ballot__head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+.ballot__brand { font-family: var(--data); font-size: var(--step--1); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
+.ballot__item { font-family: var(--display); font-size: var(--step-2); font-weight: 800; text-transform: uppercase; line-height: 0.92; }
+.ballot__origin { font-family: var(--data); font-size: var(--step--1); color: var(--ink-faint); }
+
+/* price block */
+.price { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+.price__now { font-family: var(--display); font-weight: 800; font-size: clamp(2.6rem, 7vw, 4rem); line-height: 0.82; color: var(--stamp); font-variant-numeric: tabular-nums; }
+.price__was { font-family: var(--data); font-size: var(--step-0); }
+.price__note { font-family: var(--data); font-size: var(--step--1); color: var(--ink-soft); }
+
+/* --- tier ladder -------------------------------------------------------- */
+.ladder { display: grid; gap: 0.5rem; }
+.ladder__track {
+  position: relative; height: 12px; background: var(--stock-2);
+  border: 1px solid var(--rule); overflow: hidden;
+}
+.ladder__fill {
+  position: absolute; inset: 0 auto 0 0; width: var(--pct, 0%);
+  background: repeating-linear-gradient(90deg, var(--ledger) 0 6px, color-mix(in srgb, var(--ledger) 72%, transparent) 6px 12px);
+  transition: width 0.5s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+.ladder__stops { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0.25rem; }
+.ladder__stop {
+  font-family: var(--data); font-size: var(--step--1); font-variant-numeric: tabular-nums;
+  display: grid; gap: 0.1rem; padding-top: 0.35rem; border-top: 2px solid var(--rule); color: var(--ink-faint);
+}
+.ladder__stop b { font-weight: 700; letter-spacing: 0.02em; }
+.ladder__stop--hit { border-top-color: var(--ledger); color: var(--ledger); }
+.ladder__stop--next { border-top-color: var(--stamp); color: var(--stamp); }
+
+/* --- stamp -------------------------------------------------------------- */
+.stamp {
+  font-family: var(--data); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; font-size: var(--step--1);
+  border: 2px solid var(--ledger); color: var(--ledger);
+  padding: 0.3em 0.6em; display: inline-block; transform: rotate(-3.5deg);
+  background: var(--ledger-soft);
+}
+.stamp--wait { border-color: var(--stamp); color: var(--stamp); background: var(--stamp-soft); transform: rotate(2deg); }
+.stamp--big { font-size: var(--step-1); border-width: 3px; padding: 0.35em 0.7em; }
+
+/* --- the dial (hero mechanic) ------------------------------------------ */
+.dial { display: grid; gap: 1.1rem; }
+.dial__readout { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.dial__people { font-family: var(--display); font-weight: 800; font-size: clamp(2.2rem, 6vw, 3.2rem); line-height: 0.85; font-variant-numeric: tabular-nums; }
+.dial input[type="range"] { width: 100%; margin: 0; accent-color: var(--stamp); height: 2rem; cursor: grab; }
+.dial__scale { display: flex; justify-content: space-between; font-family: var(--data); font-size: var(--step--1); color: var(--ink-faint); }
+.dial__hint { font-family: var(--data); font-size: var(--step--1); color: var(--ink-soft); letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* --- receipt ------------------------------------------------------------ */
+.receipt {
+  background: var(--stock); border: 1px solid var(--rule);
+  font-family: var(--data); font-size: var(--step-0);
+  padding: clamp(1.1rem, 3vw, 1.9rem);
+  display: grid; gap: 0.1rem;
+}
+.receipt__row { display: flex; align-items: baseline; gap: 0.4rem; line-height: 1.9em; }
+.receipt__row .leader { flex: 1; border-bottom: 1px dotted var(--rule); translate: 0 -0.25em; min-width: 1.5rem; }
+.receipt__row .amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.receipt__row--total { border-top: 2px solid var(--ink); margin-top: 0.5rem; font-weight: 700; }
+.receipt__row--sub { color: var(--ink-soft); padding-left: 1.4em; }
+.receipt__row--ours { color: var(--stamp); }
+.receipt h4 { font-family: var(--data); font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; font-size: var(--step--1); margin-bottom: 0.6rem; color: var(--ink-soft); }
+
+/* --- generic grids ----------------------------------------------------- */
+.grid { display: grid; gap: clamp(1rem, 2.5vw, 1.5rem); }
+.grid--2 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
+.grid--3 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); }
+.grid--4 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); }
+.split { display: grid; gap: clamp(1.5rem, 4vw, 3rem); }
+@media (min-width: 60rem) { .split { grid-template-columns: 1fr 1fr; align-items: start; } .split--lead { grid-template-columns: 0.85fr 1.15fr; } }
+
+/* --- numbered sequence (only where order is real) ---------------------- */
+.steps { counter-reset: step; display: grid; gap: 0; }
+.step {
+  display: grid; gap: 0.5rem; padding-block: 1.4rem; border-top: 1px solid var(--rule);
+  grid-template-columns: auto 1fr; column-gap: clamp(1rem, 3vw, 2.5rem);
+}
+.step:last-child { border-bottom: 1px solid var(--rule); }
+.step::before {
+  counter-increment: step; content: counter(step, decimal-leading-zero);
+  font-family: var(--display); font-weight: 800; font-size: var(--step-3); line-height: 0.8;
+  color: var(--stamp); grid-row: span 2;
+}
+.step h4 { align-self: center; }
+.step p { color: var(--ink-soft); }
+
+/* --- plain info tiles -------------------------------------------------- */
+.tile { display: grid; gap: 0.4rem; padding-top: 0.9rem; border-top: 2px solid var(--ink); }
+.tile .k { font-family: var(--data); font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-faint); }
+.tile .v { font-family: var(--display); font-weight: 800; font-size: var(--step-2); line-height: 1; font-variant-numeric: tabular-nums; }
+.tile p { font-size: var(--step--1); color: var(--ink-soft); max-width: 34ch; }
+
+/* --- tables ------------------------------------------------------------ */
+.table-scroll { overflow-x: auto; border: 1px solid var(--rule); background: var(--stock); }
+table { border-collapse: collapse; width: 100%; font-family: var(--data); font-size: var(--step--1); }
+th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--rule-soft); white-space: nowrap; }
+th { text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 2px solid var(--ink); color: var(--ink-soft); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tbody tr:last-child td { border-bottom: 0; }
+
+/* --- forms ------------------------------------------------------------- */
+.form { display: grid; gap: 0.7rem; }
+.form__row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.form input[type="email"], .form input[type="text"], .form input[type="number"], .form select {
+  flex: 1 1 14rem; min-width: 0;
+  font-family: var(--data); font-size: var(--step-0); color: var(--ink);
+  background: var(--stock); border: 2px solid var(--ink); padding: 0.6em 0.7em;
+}
+.form input::placeholder { color: var(--ink-faint); }
+.form__note { font-family: var(--data); font-size: var(--step--1); color: var(--ink-soft); }
+.form__ok { font-family: var(--data); font-size: var(--step-0); color: var(--ledger); font-weight: 700; }
+
+/* --- faq --------------------------------------------------------------- */
+details { border-top: 1px solid var(--rule); padding-block: 1rem; }
+details:last-of-type { border-bottom: 1px solid var(--rule); }
+summary {
+  font-family: var(--display); font-weight: 800; text-transform: uppercase; font-size: var(--step-1);
+  line-height: 1.05; cursor: pointer; list-style: none; display: flex; gap: 0.8rem; align-items: baseline;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "+"; color: var(--stamp); font-family: var(--data); flex: none; }
+details[open] summary::before { content: "\2013"; }
+details p { margin-top: 0.7rem; color: var(--ink-soft); padding-left: 1.6rem; }
+
+/* --- callout ----------------------------------------------------------- */
+.callout {
+  border: 2px solid var(--ink); background: var(--stock);
+  padding: clamp(1.2rem, 3vw, 2rem); display: grid; gap: 0.8rem;
+  box-shadow: 6px 6px 0 var(--shadow);
+}
+
+/* --- footer ------------------------------------------------------------ */
+.foot { border-top: 3px solid var(--ink); padding-block: clamp(2rem, 5vw, 3.5rem) 2rem; }
+.foot__grid { display: grid; gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+.foot h5 { font-family: var(--data); text-transform: uppercase; letter-spacing: 0.12em; font-size: var(--step--1); margin: 0 0 0.7rem; color: var(--ink-faint); font-weight: 700; }
+.foot li { margin-bottom: 0.35rem; }
+.foot a { font-family: var(--data); font-size: var(--step--1); text-decoration: none; color: var(--ink-soft); }
+.foot a:hover { color: var(--stamp); }
+.smallprint { margin-top: 2.5rem; padding-top: 1.2rem; border-top: 1px solid var(--rule); font-family: var(--data); font-size: var(--step--1); color: var(--ink-faint); display: grid; gap: 0.4rem; }
+.smallprint p { max-width: 80ch; }
+
+/* --- motion ------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  .ticker__track { animation: none; }
+}
+
+/* --- containment: grid/flex children default to min-width:auto, which lets
+       a wide table or a nowrap receipt amount push its own track past the
+       viewport. Reset it so the scroller and the wrap actually do their job. */
+.split > *, .grid > *, .hero__grid > * { min-width: 0; }
+.table-scroll { min-width: 0; max-width: 100%; }
+.receipt { min-width: 0; }
+.receipt__row { min-width: 0; flex-wrap: wrap; }
+.receipt__row > span:first-child { min-width: 0; overflow-wrap: break-word; }
+.receipt__row .leader { min-width: 1.5rem; }
+table caption { caption-side: top; }
+
+/* --- last-mile resets -------------------------------------------------- */
+dl, dd { margin: 0; }
+td:not(.num), th:not(.num) { white-space: normal; }   /* only figures stay on one line */
+td:first-child, th:first-child { min-width: 11rem; }
