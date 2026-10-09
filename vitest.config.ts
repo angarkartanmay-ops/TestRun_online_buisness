@@ -1,0 +1,20 @@
+import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // `server-only` throws outside the react-server condition; tests run in plain Node.
+      "server-only": fileURLToPath(new URL("./tests/support/empty.ts", import.meta.url)),
+    },
+  },
+  test: {
+    environment: "node",
+    include: ["tests/**/*.test.ts"],
+    testTimeout: 30_000,
+    hookTimeout: 60_000,
+    // each test file boots its own in-memory Postgres; keep them in separate workers
+    pool: "forks",
+  },
+});

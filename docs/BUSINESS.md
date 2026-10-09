@@ -34,16 +34,22 @@ A **drop** is one item, one brand, one deadline, and a **price ladder**:
 | 250 | $27 |
 | 500 | $23 |
 
-- Joining **authorises** the current tier. It never charges it.
-- Crossing a tier moves **everyone** to the new price, including members who joined at a higher
-  one — the difference is refunded to the card they joined with.
-- At the close we capture the lowest tier unlocked and the brand manufactures exactly that number
-  plus a 3% defect buffer.
-- Below tier one, nothing is made and nobody is charged. Roughly 1 in 9 drops misses quorum.
+- Joining places a card **hold** at the current price — the most you can pay. It never charges it.
+- Crossing a tier moves **everyone** to the new price, including members who joined at a higher one.
+- At close we **capture the final price** (equal or lower than every hold) and the bank releases
+  the rest. Nobody is charged the higher price and then refunded — the difference is never taken.
+- **The ratchet:** an unlocked tier can never re-lock, so the price only ever falls.
+- Members can leave freely before quorum, and within an hour of joining; after that they're locked
+  in, because their spot is part of what holds the price down for everyone else.
+- Below tier one, nothing is made and nobody is charged.
+- Windows are **72 hours by default, 6 days maximum** — card authorisations expire after 7.
 
-The retroactive refund is the design decision the whole thing rests on. Conventional group buying
-punishes early joiners by making them the ones who take the risk, which suppresses exactly the
-behaviour the model needs. Here, joining first is strictly dominant: you can only be refunded.
+Charging the final price to everyone is the design decision the whole thing rests on. Conventional
+group buying punishes early joiners by making them carry the risk, which suppresses exactly the
+behaviour the model needs. Here, joining first is strictly dominant: your price can only fall.
+
+See `docs/VALIDATION.md` for the market evidence behind the windows, the 25-member first-tier cap
+and the ratchet.
 
 ## 3. Why the price can fall this far
 

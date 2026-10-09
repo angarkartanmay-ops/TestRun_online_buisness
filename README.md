@@ -2,88 +2,76 @@
 
 > Alone you pay retail. Together you pay the mill.
 
-A Gen-Z-native online business and its website. Gen Z already decides what to buy in the group
-chat — screenshot, "should I get this", verdict — but then buys alone, at retail. QUORUM makes the
-group the transaction: **the price falls for everyone as more people join, including the people who
-joined first.**
+Gen Z already decides what to buy in the group chat, then buys alone at retail. QUORUM makes the
+group the transaction: a **drop** has a price ladder, every person who joins pushes the price down
+for **everyone** — first in included — and every cleared drop publishes its full cost receipt.
 
-## The business in five lines
+- **Business case:** [`docs/BUSINESS.md`](docs/BUSINESS.md)
+- **Does it have potential? The evidence, for and against:** [`docs/VALIDATION.md`](docs/VALIDATION.md)
+- **Going live:** [`docs/DEPLOY.md`](docs/DEPLOY.md)
 
-- A **drop** is one item, one brand, one deadline and a **price ladder** (25 members → $41,
-  100 → $33, 250 → $27, 500 → $23).
-- Joining **authorises** your card; it never charges it. Cross a tier and *everyone* drops to the
-  new price — earlier members are refunded the difference.
-- Below tier one, nothing is manufactured and nobody is charged.
-- We take **8%** of cleared volume, shown as a line on your receipt. **3%** of that goes to the
-  host who brought the group — that is the entire marketing budget.
-- Every cleared drop gets a **published receipt**: mill, cut-and-sew, dye lot, freight, duty code,
-  the brand's margin and our fee, to the cent.
+## How a drop works
 
-Membership is free and permanent. There is no subscription and no advertising.
+| Step | What happens | In code |
+|---|---|---|
+| Join | Card **hold** at the current price — the most you can pay | `joinDrop` → Stripe `capture_method: "manual"` |
+| More join | Crossing a tier drops the price for everyone. Tiers never re-lock (the ratchet) | `applyRatchet` — `GREATEST()` in SQL |
+| Leave | Free before quorum and for 1 hour after joining; then locked in | `canLeave` |
+| Close | Capture the final price for everyone; the bank releases the rest. Below quorum, release all | `settleDrop` — idempotent, resumable |
+| Ship | Ship-by date on every drop; miss it and every member is refunded | `overdueDrops`, `refundDrop` |
+| Share | Every member gets a crew link; the link preview shows the live price | `proxy.ts`, `opengraph-image.tsx` |
 
-**Why it can be this cheap:** a cleared drop is a pre-paid, guaranteed order, which deletes the
-wholesale markup, the retail markup, the unsold-stock reserve and the ad spend — $36.84 per unit on
-a $58 tee. Not one cent of material or labour is removed.
-
-Full business case, unit economics, go-to-market, moat and risks: **[`docs/BUSINESS.md`](docs/BUSINESS.md)**.
-
-## The website
-
-Four pages, hand-written, **no build step and no dependencies**.
-
-| Page | What's on it |
-|---|---|
-| `index.html` | Hero with a **draggable dial** — move it and watch the price fall through the tiers. How a drop clears, live board, the six bylaws, FAQ, member signup. |
-| `drops.html` | All eight open drops with live tier ladders, countdowns and category filtering. |
-| `receipts.html` | The full line-by-line receipt for a $23 t-shirt, where our $1.84 goes, and brand deal terms. |
-| `hosts.html` | Host program with an **earnings estimator**, and the data showing reach barely predicts conversion. |
-
-### Design
-
-An ironic-institutional register — union-hall bulletin, two-colour offset print — chosen because
-the co-op/bureau aesthetic is both current and *true to the product*: this is a buyers' union that
-publishes its paperwork.
-
-- **Ink:** union blue `#1f2e5c` (structure) · stamp red `#d8452f` (price movement) · ledger green
-  `#2f6b4f` (quorum met) · bulletin stock `#e4e5dc`
-- **Type:** Big Shoulders Display (civic signage) / Archivo (body) / Courier Prime (receipts,
-  ledgers, clocks)
-- Full light **and** dark palettes, driven by tokens, honouring `prefers-color-scheme` *and* an
-  explicit `data-theme` override.
-- Responsive to 390px with no horizontal scroll, `prefers-reduced-motion` respected, visible focus
-  states throughout.
-
-### Run it
-
-Any static server — nothing to install or compile:
+## Run it
 
 ```bash
-python3 -m http.server 8000
-# then open http://localhost:8000
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-Opening `index.html` straight off disk works too; only the webfonts need the network.
+No setup needed. With no environment variables, the app uses an embedded Postgres (PGlite, stored
+in `.pglite/`), seeds sample drops, simulates card holds, and shows sign-in codes on screen. To
+open `/admin` locally, start it with `ADMIN_EMAILS=you@example.com npm run dev` and read the code
+from the terminal.
 
-### Structure
+```bash
+npm test           # 42 tests: tier math, auth, the full join → settle → refund lifecycle
+npm run typecheck
+npm run build
+```
+
+## Stack
+
+Next.js 16 (App Router) · TypeScript · Drizzle ORM on Postgres (Supabase in production, PGlite
+locally and in tests) · Stripe (manual-capture PaymentIntents) · Resend · Tailwind CSS v4 ·
+Phosphor icons · Vitest.
 
 ```
-index.html  drops.html  receipts.html  hosts.html
-css/quorum.css     design tokens + components (one stylesheet)
-js/quorum.js       tier math, hero dial, boards, countdowns, estimator
-docs/BUSINESS.md   the business case
+src/
+  app/                 pages, API routes, server actions, OG share cards
+  components/          UI — LivePanel (polling + join flow), Ladder, SpecimenPlate, Receipt…
+  lib/
+    tiers.ts           pure price-ladder math, shared by server and browser
+    pledges.ts         join · confirm · leave · the ratchet
+    settle.ts          capture / release / payouts / refunds
+    auth.ts            email-code sign-in, sessions
+    payments/          Stripe + demo providers behind one interface
+    db/schema.ts       10 tables
+  proxy.ts             crew-link attribution
+drizzle/               SQL migrations
+tests/                 Vitest, against a real in-memory Postgres and a strict fake Stripe
 ```
 
-`js/quorum.js` holds the single source of truth for drops: the `DROPS` array. Tier state is
-derived by `stateOf()`, and every board, ticker and price on the site renders from it — change a
-drop in one place and the whole site follows. Deadlines are stored as *hours remaining* rather than
-dates, so the board never goes stale.
+## Design
 
-## Honest status
+"Union Thermal": bulletin-stock paper, union blue, one stamp-red accent for price movement, and
+the thermal receipt as a second material. Big Shoulders (variable, optical-size axis) for display,
+Archivo for text, JetBrains Mono for every number. Full light and dark palettes. Drops without
+brand photography show a **specimen plate** — category, origin codes, a glyph and the spec line —
+rather than a fake product render.
 
-This is a **concept build**. The brands, drops, member counts and payouts are illustrative; no
-goods are for sale and no payment is processed anywhere on the site. The signup forms save to
-`localStorage` and say so on the page — there is no server behind them yet.
+## Status
 
-To make it real, in order: payment authorise-and-capture (the ladder needs auth-then-capture with
-partial capture, plus retroactive refunds), a brand cost-sheet verification workflow, and host
-payout rails.
+Built to the point of being deployable. Payments run in **preview mode** (simulated, clearly
+bannered) until Stripe keys are added; the sample brands and drops are fictional and removable with
+one command. See [`docs/DEPLOY.md`](docs/DEPLOY.md) for the remaining steps and the honest list of
+known limits.
