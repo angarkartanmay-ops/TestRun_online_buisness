@@ -283,8 +283,14 @@ export async function seedDemo(db: DB, now = new Date()) {
   }
 }
 
-/** Remove every seeded row. Real members, drops and pledges are untouched. */
+/**
+ * Remove every seeded row — and any other account on the reserved `.invalid` TLD
+ * (RFC 2606), such as deployment smoke-test probes. No real person can own one.
+ * Drops are removed only if every pledge on them came from such an account.
+ */
 export async function clearDemo(db: DB) {
-  await db.execute(sql`delete from drops where id in (select distinct drop_id from pledges p join users u on u.id = p.user_id where u.email like '%@demo.quorum.invalid') and id not in (select distinct drop_id from pledges p join users u on u.id = p.user_id where u.email not like '%@demo.quorum.invalid')`);
-  await db.execute(sql`delete from users where email like '%@demo.quorum.invalid'`);
+  await db.execute(sql`delete from drops where id in (select distinct drop_id from pledges p join users u on u.id = p.user_id where u.email like '%.invalid') and id not in (select distinct drop_id from pledges p join users u on u.id = p.user_id where u.email not like '%.invalid')`);
+  await db.execute(sql`delete from users where email like '%.invalid'`);
+  await db.execute(sql`delete from login_codes where email like '%.invalid'`);
+  await db.execute(sql`delete from email_log where "to" like '%.invalid'`);
 }

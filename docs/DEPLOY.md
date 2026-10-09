@@ -4,43 +4,38 @@ The app is deployable today in **preview mode** (simulated payments, sample drop
 with real money is the list below, in order. Each step says what it unlocks, so you can stop at
 any point and still have a working site.
 
-## 0. Status
+## 0. Status — live in preview mode
+
+**https://quorum-chi-roan.vercel.app**
 
 | | |
 |---|---|
-| Database | **Done.** Supabase project `quorum` (`kroeasqlezuxpojwoofl`, us-east-1). Schema migrated, row-level security on all 10 tables, the public Data API locked out, a least-privilege `quorum_app` role created, Supabase security advisor clean. |
-| Code | **Done.** This repository, default branch. Builds clean; 42 tests and 31 browser checks pass. |
-| Hosting | **One step left — yours.** Creating the Vercel project was refused: the Vercel connection used to build this has read-only access to the `angarkartanmay-ops-projects` scope. |
+| Hosting | Vercel project `quorum` (`prj_a4gMytV7swkbFLZmpnew4P8d6hTP`), region `iad1`. Production is public; preview deployments stay behind Vercel login. |
+| Database | Supabase `quorum` (`kroeasqlezuxpojwoofl`, us-east-1) via the shared pooler at `aws-0-us-east-1.pooler.supabase.com:6543` as the least-privilege `quorum_app` role. Row-level security on every table; the public Data API is locked out. |
+| Verified in production | `/api/health` ok · all pages 200 · sign-in code → session (HttpOnly) → join (hold placed, member count +1) → leave (hold released) |
+| Mode | Preview: payments simulated, sample drops, codes shown on screen for non-admins |
 
-### Put it on Vercel (about 5 minutes)
+### Three small things to do in a dashboard
 
-1. Go to **vercel.com/new**, pick `angarkartanmay-ops/TestRun_online_buisness`, and **Import**.
-   Framework is detected as Next.js; leave every build setting at its default.
-2. Before clicking Deploy, open **Environment Variables** and add:
+These need a human click; the tokens used to build this couldn't do them.
 
-   | Name | Value |
-   |---|---|
-   | `DATABASE_URL` | `postgresql://quorum_app.kroeasqlezuxpojwoofl:<APP PASSWORD>@aws-1-us-east-1.pooler.supabase.com:6543/postgres` |
-   | `AUTH_SECRET` | any 32+ random characters |
-   | `CRON_SECRET` | any 32+ random characters |
-   | `ADMIN_EMAILS` | your email |
-   | `SEED_DEMO` | `true` (loads the sample drops on first visit) |
+1. **Turn on auto-deploy.** Vercel → `quorum` → Settings → Git → *Connect Git Repository* →
+   `angarkartanmay-ops/TestRun_online_buisness`. Until then, pushes don't deploy on their own.
+2. **Remove `pg_net`.** It was enabled briefly to smoke-test the live site from inside the
+   database, and Supabase's security advisor flags it (extension in `public`). Supabase → SQL
+   editor: `drop extension pg_net;`
+3. **Rotate the database password** (it passed through the setup session). Supabase → SQL editor:
+   `alter role quorum_app with password 'NEW-PASSWORD';` then update `DATABASE_URL` in Vercel →
+   Settings → Environment Variables, and redeploy.
 
-   The app password was generated during setup and handed over privately — it is not in this
-   repository. To set a new one at any time, run in Supabase → SQL editor:
-   `alter role quorum_app with password 'NEW-PASSWORD';`
+### If the database ever stops connecting
 
-3. Deploy, then open `https://<your-project>.vercel.app/api/health`. You want
-   `{"ok":true,"database":"ok",...}`.
-   - `Tenant or user not found` → change `aws-1` to `aws-0` in `DATABASE_URL` and redeploy.
-     (Supabase → **Connect** → *Transaction pooler* shows the exact host for this project.)
-   - `password authentication failed` → the password in `DATABASE_URL` doesn't match the role.
+`/api/health` reports the driver's own error.
 
-Prefer to have Claude finish this? Reconnect Vercel at claude.ai → Settings → Connectors with
-access to the `angarkartanmay-ops-projects` team, start a new session, and ask it to deploy.
-
-**Free-tier note:** Supabase pauses free projects after 7 days without activity. Restore it from
-the Supabase dashboard, or move to a paid plan before launch.
+- `Tenant or user not found` → the pooler host or username is wrong. Copy the host from Supabase →
+  **Connect** → *Transaction pooler*; the username is `quorum_app.kroeasqlezuxpojwoofl`.
+- `password authentication failed` → the password in `DATABASE_URL` doesn't match the role.
+- Free Supabase projects **pause after 7 days without traffic** — restore from the dashboard.
 
 ## 1. Sign in to the admin console
 
@@ -100,8 +95,9 @@ Drops settle three ways, so nothing depends on any single one:
 ## 6. Remove the sample data
 
 1. Set `SEED_DEMO=false`.
-2. Run `DATABASE_URL=… npm run db:reset` — deletes every `@demo.quorum.invalid` account and the
-   sample drops. Real members and drops are never touched.
+2. Run `DATABASE_URL=… npm run db:reset` — deletes every account on the reserved `.invalid`
+   domain (the samples, plus the `prod-check@quorum.invalid` smoke-test probe) and the sample
+   drops. Real members and drops are never touched.
 
 ## 7. Legal
 

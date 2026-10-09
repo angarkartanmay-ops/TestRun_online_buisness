@@ -6,6 +6,7 @@ Gen Z already decides what to buy in the group chat, then buys alone at retail. 
 group the transaction: a **drop** has a price ladder, every person who joins pushes the price down
 for **everyone** — first in included — and every cleared drop publishes its full cost receipt.
 
+- **Live (preview mode):** https://quorum-chi-roan.vercel.app
 - **Business case:** [`docs/BUSINESS.md`](docs/BUSINESS.md)
 - **Does it have potential? The evidence, for and against:** [`docs/VALIDATION.md`](docs/VALIDATION.md)
 - **Going live:** [`docs/DEPLOY.md`](docs/DEPLOY.md)
@@ -71,7 +72,7 @@ rather than a fake product render.
 
 ## Status
 
-Built to the point of being deployable. Payments run in **preview mode** (simulated, clearly
-bannered) until Stripe keys are added; the sample brands and drops are fictional and removable with
+Deployed on Vercel with a Supabase database, and verified end to end in production. Payments run
+in **preview mode** (simulated, clearly bannered) until Stripe keys are added; the sample brands and drops are fictional and removable with
 one command. See [`docs/DEPLOY.md`](docs/DEPLOY.md) for the remaining steps and the honest list of
 known limits.
