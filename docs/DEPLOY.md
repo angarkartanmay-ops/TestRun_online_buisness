@@ -4,13 +4,43 @@ The app is deployable today in **preview mode** (simulated payments, sample drop
 with real money is the list below, in order. Each step says what it unlocks, so you can stop at
 any point and still have a working site.
 
-## 0. What's already done
+## 0. Status
 
 | | |
 |---|---|
-| Database | Supabase project `quorum` (us-east-1), schema migrated, row-level security on, app role created |
-| Hosting | Vercel project `quorum`, connected to this repository |
-| Sample data | Seeded once into the empty database (`SEED_DEMO=true`) |
+| Database | **Done.** Supabase project `quorum` (`kroeasqlezuxpojwoofl`, us-east-1). Schema migrated, row-level security on all 10 tables, the public Data API locked out, a least-privilege `quorum_app` role created, Supabase security advisor clean. |
+| Code | **Done.** This repository, default branch. Builds clean; 42 tests and 31 browser checks pass. |
+| Hosting | **One step left — yours.** Creating the Vercel project was refused: the Vercel connection used to build this has read-only access to the `angarkartanmay-ops-projects` scope. |
+
+### Put it on Vercel (about 5 minutes)
+
+1. Go to **vercel.com/new**, pick `angarkartanmay-ops/TestRun_online_buisness`, and **Import**.
+   Framework is detected as Next.js; leave every build setting at its default.
+2. Before clicking Deploy, open **Environment Variables** and add:
+
+   | Name | Value |
+   |---|---|
+   | `DATABASE_URL` | `postgresql://quorum_app.kroeasqlezuxpojwoofl:<APP PASSWORD>@aws-1-us-east-1.pooler.supabase.com:6543/postgres` |
+   | `AUTH_SECRET` | any 32+ random characters |
+   | `CRON_SECRET` | any 32+ random characters |
+   | `ADMIN_EMAILS` | your email |
+   | `SEED_DEMO` | `true` (loads the sample drops on first visit) |
+
+   The app password was generated during setup and handed over privately — it is not in this
+   repository. To set a new one at any time, run in Supabase → SQL editor:
+   `alter role quorum_app with password 'NEW-PASSWORD';`
+
+3. Deploy, then open `https://<your-project>.vercel.app/api/health`. You want
+   `{"ok":true,"database":"ok",...}`.
+   - `Tenant or user not found` → change `aws-1` to `aws-0` in `DATABASE_URL` and redeploy.
+     (Supabase → **Connect** → *Transaction pooler* shows the exact host for this project.)
+   - `password authentication failed` → the password in `DATABASE_URL` doesn't match the role.
+
+Prefer to have Claude finish this? Reconnect Vercel at claude.ai → Settings → Connectors with
+access to the `angarkartanmay-ops-projects` team, start a new session, and ask it to deploy.
+
+**Free-tier note:** Supabase pauses free projects after 7 days without activity. Restore it from
+the Supabase dashboard, or move to a paid plan before launch.
 
 ## 1. Sign in to the admin console
 
