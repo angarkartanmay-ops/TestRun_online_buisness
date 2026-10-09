@@ -8,7 +8,10 @@ export async function GET() {
   try {
     await (await getDb()).execute(sql`select 1`);
   } catch (err) {
-    database = err instanceof Error ? err.message.slice(0, 200) : "error";
+    // Report the driver's own error, not the ORM wrapper's "Failed query: …": the root
+    // cause (e.g. "Tenant or user not found") is what an operator needs to act on.
+    const cause = err instanceof Error && err.cause instanceof Error ? err.cause : err;
+    database = cause instanceof Error ? cause.message.slice(0, 200) : "error";
   }
   return NextResponse.json(
     { ok: database === "ok", database, modes },
