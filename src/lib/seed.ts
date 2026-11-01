@@ -287,8 +287,9 @@ export async function seedDemo(db: DB, now = new Date()) {
 /**
  * Keep the board from ever going empty. Run by the daily cron when practice drops
  * are enabled: retires the old sample catalogue, deletes closed practice drops
- * after three weeks (keeping the newest cleared and missed examples), and opens
- * a fresh batch whenever fewer than two practice drops are still open.
+ * after three weeks (keeping the newest cleared, missed and receipted examples),
+ * opens a fresh batch whenever fewer than two practice drops are still open, and
+ * restores the closed examples if they're missing.
  */
 export async function refreshPracticeDrops(db: DB, now = new Date()): Promise<{ created: number; removed: number }> {
   let removed = 0;
@@ -306,13 +307,15 @@ export async function refreshPracticeDrops(db: DB, now = new Date()): Promise<{ 
     .returning({ id: drops.id });
   removed += legacy.length;
 
-  // 2. Closed practice drops older than three weeks, except the newest of each outcome.
+  // 2. Closed practice drops older than three weeks, except the newest of each
+  // outcome — and the newest with a published receipt, which the homepage shows.
+  const withReceipt = sql`jsonb_array_length(${drops.receipt}) > 0`;
   const keep: string[] = [];
-  for (const status of ["succeeded", "failed"] as const) {
+  for (const where of [eq(drops.status, "succeeded"), eq(drops.status, "failed"), and(eq(drops.status, "succeeded"), withReceipt)]) {
     const [newest] = await db
       .select({ id: drops.id })
       .from(drops)
-      .where(and(eq(drops.practice, true), eq(drops.status, status)))
+      .where(and(eq(drops.practice, true), where))
       .orderBy(desc(drops.closesAt))
       .limit(1);
     if (newest) keep.push(newest.id);
@@ -336,10 +339,26 @@ export async function refreshPracticeDrops(db: DB, now = new Date()): Promise<{ 
     .from(drops)
     .where(and(eq(drops.practice, true), eq(drops.status, "live"), gt(drops.closesAt, now)));
   let created = 0;
+  const suffix = `-${now.toISOString().slice(2, 13).replace(/[-T]/g, "")}`; // 2026-11-04T13 → "-26110413"
   if ((open?.n ?? 0) < 2) {
     const { pool, hostId } = await memberPool(db);
-    const suffix = `-${now.toISOString().slice(2, 13).replace(/[-T]/g, "")}`; // 2026-11-04T13 → "-26110413"
     for (const s of LIVE) if (await insertSeed(db, s, now, suffix, pool, hostId)) created++;
+  }
+
+  // 4. The closed examples — a cleared drop with its published receipt, and one
+  // that missed quorum — if a database that wasn't empty at first boot lacks them.
+  const missing: Seed[] = [];
+  for (const s of HISTORY) {
+    const [has] = await db
+      .select({ id: drops.id })
+      .from(drops)
+      .where(and(eq(drops.practice, true), eq(drops.status, s.status!), s.receipt?.length ? withReceipt : sql`true`))
+      .limit(1);
+    if (!has) missing.push(s);
+  }
+  if (missing.length) {
+    const { pool, hostId } = await memberPool(db);
+    for (const s of missing) if (await insertSeed(db, s, now, suffix, pool, hostId)) created++;
   }
   return { created, removed };
 }

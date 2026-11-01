@@ -41,7 +41,7 @@ open `/admin` locally, start it with `ADMIN_EMAILS=you@example.com npm run dev` 
 from the terminal.
 
 ```bash
-npm test           # 62 tests: tier math, margin guard, auth, card-hold and pay-after-close lifecycles
+npm test           # 63 tests: tier math, margin guard, auth, card-hold and pay-after-close lifecycles
 npm run typecheck
 npm run build
 ```

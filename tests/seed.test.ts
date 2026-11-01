@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { createPglite } from "@/lib/db/pglite";
 import { drops } from "@/lib/db/schema";
@@ -54,13 +54,32 @@ describe("practice drops", () => {
     // Running it again in the same hour can't double up.
     expect((await refreshPracticeDrops(db, later)).created).toBe(0);
 
-    // A month on, old closed drops are deleted — except the newest cleared and missed examples.
+    // A month on, old closed drops are deleted — except the newest cleared and missed
+    // examples, and the newest with a published receipt (the homepage shows it).
     const muchLater = new Date(start.getTime() + 40 * D);
     await db.update(drops).set({ status: "succeeded" }).where(eq(drops.status, "live"));
     const tidy = await refreshPracticeDrops(db, muchLater);
     expect(tidy.removed).toBeGreaterThan(0);
     expect((await listDrops(db, ["failed"])).length).toBe(1);
-    expect((await listDrops(db, ["succeeded"])).length).toBe(1);
+    const cleared = await listDrops(db, ["succeeded"]);
+    expect(cleared.length).toBe(2);
+    expect(cleared.some((d) => d.receipt.length > 0)).toBe(true);
+  });
+
+  it("restores the closed examples on a database that wasn't empty at first boot", async () => {
+    const db = await createPglite();
+    const now = new Date("2026-11-01T17:00:00Z");
+    // Production's state after the first restock: live practice drops, no closed examples.
+    await refreshPracticeDrops(db, now);
+    await db.delete(drops).where(inArray(drops.status, ["succeeded", "failed"]));
+    expect(await listDrops(db, ["succeeded", "failed"])).toHaveLength(0);
+
+    const r = await refreshPracticeDrops(db, now);
+    expect(r.created).toBe(2);
+    const [receipt] = await listDrops(db, ["succeeded"]);
+    expect(receipt!.receipt.reduce((s, l) => s + l.cents, 0)).toBe(receipt!.finalPriceCents);
+    expect(await listDrops(db, ["failed"])).toHaveLength(1);
+    expect((await refreshPracticeDrops(db, now)).created).toBe(0);
   });
 
   it("retires the old sample catalogue unless a real member joined it", async () => {
