@@ -1,8 +1,19 @@
-const dateFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
-const dateTimeFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+import { CURRENCY, LOCALE } from "./money";
+
+/**
+ * Dates render in the market's time zone on the server and in the browser alike,
+ * so "closes 4 Nov, 7:30 pm" means the same moment to everyone in the drop.
+ */
+export const TIME_ZONE = process.env.NEXT_PUBLIC_TIME_ZONE || (CURRENCY === "inr" ? "Asia/Kolkata" : "UTC");
+const ZONE_LABEL: Record<string, string> = { "Asia/Kolkata": "IST", UTC: "UTC" };
+
+const dateFmt = new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", timeZone: TIME_ZONE });
+const dateTimeFmt = new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: TIME_ZONE });
 
 export const fmtDate = (d: Date | string) => dateFmt.format(new Date(d));
 export const fmtDateTime = (d: Date | string) => dateTimeFmt.format(new Date(d));
+/** With the zone spelled out, for emails: "4 Nov, 7:30 pm IST". */
+export const fmtDateTimeZone = (d: Date | string) => `${fmtDateTime(d)} ${ZONE_LABEL[TIME_ZONE] ?? TIME_ZONE}`;
 
 /** "2d 13h", "13h 04m", "4m 09s" — coarse enough to read at a glance. */
 export function fmtRemaining(ms: number): string {
@@ -18,9 +29,15 @@ export function fmtRemaining(ms: number): string {
   return `${m}m ${p(sec)}s`;
 }
 
-/** Country codes from an origin line: "Okayama, JP · sewn in Tijuana, MX" → "JP · MX". */
+/**
+ * The short origin for a specimen plate. Country codes when the line has them
+ * ("Okayama, JP · sewn in Tijuana, MX" → "JP · MX"), otherwise the cities
+ * ("Knit + printed in Tiruppur, Tamil Nadu" → "Tiruppur").
+ */
 export function originCodes(origin: string): string {
-  return [...new Set(origin.match(/\b[A-Z]{2}\b/g) ?? [])].join(" · ");
+  const codes = [...new Set(origin.match(/\b[A-Z]{2}\b/g) ?? [])];
+  if (codes.length) return codes.join(" · ");
+  return [...new Set([...origin.matchAll(/\bin ([A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+)?),/g)].map((m) => m[1]!))].join(" · ");
 }
 
 export function relTime(iso: string, now = Date.now()): string {

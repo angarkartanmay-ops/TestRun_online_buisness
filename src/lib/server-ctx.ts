@@ -3,7 +3,7 @@ import { config } from "./config";
 import type { Ctx } from "./ctx";
 import { getDb } from "./db";
 import { defaultMailer } from "./mailer";
-import { getPayments } from "./payments";
+import { getPayments, getRazorpay } from "./payments";
 
 export async function getCtx(): Promise<Ctx> {
   return {
@@ -13,6 +13,8 @@ export async function getCtx(): Promise<Ctx> {
     now: () => new Date(),
     siteUrl: config.siteUrl,
     currency: config.currency,
+    razorpay: getRazorpay(),
+    upi: config.upiVpa ? { vpa: config.upiVpa, payee: config.upiPayeeName } : null,
   };
 }
 

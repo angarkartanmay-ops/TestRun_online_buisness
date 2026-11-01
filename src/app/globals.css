@@ -13,15 +13,15 @@
   --receipt: #fafaf6;
   --ink: #172350;
   --ink-2: #4a5683;
-  --ink-3: #7f89a8;
+  --ink-3: #535d7c; /* ≥4.5:1 on paper, paper-2 and receipt (WCAG AA) */
   --line: rgba(23, 35, 80, 0.16);
   --line-2: rgba(23, 35, 80, 0.08);
-  --stamp: #df4429;
+  --stamp: #b0311a; /* ≥4.5:1 as text on every paper, and under white button text */
   --stamp-ink: #ffffff;
-  --stamp-soft: rgba(223, 68, 41, 0.1);
+  --stamp-soft: rgba(176, 49, 26, 0.1);
   --go: #2b7350;
   --go-soft: rgba(43, 115, 80, 0.12);
-  --warn: #a86a12;
+  --warn: #8a560c;
   --shadow: rgba(23, 35, 80, 0.18);
 
   --plate-sage: #c3ccb2;
@@ -43,7 +43,7 @@
     --receipt: #1b2028;
     --ink: #e9eae3;
     --ink-2: #a9b1c7;
-    --ink-3: #6c7590;
+    --ink-3: #838ca6;
     --line: rgba(233, 234, 227, 0.15);
     --line-2: rgba(233, 234, 227, 0.07);
     --stamp: #ff6b4e;
@@ -72,7 +72,7 @@
   --receipt: #1b2028;
   --ink: #e9eae3;
   --ink-2: #a9b1c7;
-  --ink-3: #6c7590;
+  --ink-3: #838ca6;
   --line: rgba(233, 234, 227, 0.15);
   --line-2: rgba(233, 234, 227, 0.07);
   --stamp: #ff6b4e;
@@ -187,6 +187,27 @@ p { text-wrap: pretty; }
 .btn-ghost { background: transparent; color: var(--ink); box-shadow: none; }
 .btn-ghost:hover { box-shadow: 3px 3px 0 var(--shadow); }
 .btn-sm { min-height: 2.375rem; font-size: 1rem; padding: 0 0.875rem; box-shadow: 3px 3px 0 var(--shadow); }
+
+/* --- size picker -------------------------------------------------------- */
+.size-chip {
+  display: inline-grid;
+  place-items: center;
+  min-width: 3rem;
+  min-height: 2.75rem;
+  padding: 0 0.75rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.9375rem;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--receipt);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+.size-chip:hover { background: var(--paper-2); }
+.size-chip.is-on { background: var(--ink); color: var(--paper); }
+.size-chip:has(input:focus-visible) { outline: 2px solid var(--stamp); outline-offset: 2px; }
 
 /* --- form --------------------------------------------------------------- */
 .field {

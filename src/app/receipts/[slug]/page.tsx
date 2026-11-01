@@ -6,8 +6,7 @@ import { Receipt } from "@/components/receipt";
 import { pledges } from "@/lib/db/schema";
 import { getDropBySlug, withLadder } from "@/lib/drops";
 import { fmtDate } from "@/lib/format";
-import { money } from "@/lib/money";
-import { rules } from "@/lib/rules";
+import { CURRENCY, money } from "@/lib/money";
 import { pageCtx } from "@/lib/server-ctx";
 import { economics } from "@/lib/settle";
 
@@ -24,7 +23,26 @@ export default async function ReceiptPage({ params }: { params: Promise<{ slug: 
     .select({ cents: sql<number>`coalesce(sum(${pledges.chargedCents}), 0)::int`, n: sql<number>`count(*)::int` })
     .from(pledges)
     .where(and(eq(pledges.dropId, drop.id), eq(pledges.status, "charged")));
-  const e = economics(vol?.cents ?? 0);
+  const e = economics(drop, vol?.cents ?? 0, vol?.n ?? 0);
+  const rows: [string, string][] =
+    e.kind === "house"
+      ? [
+          ["Members who paid", String(vol?.n ?? 0)],
+          ["Total paid", money(e.volume)],
+          ["GST, 5% (to the government)", money(e.gst)],
+          ["Payment gateway", money(e.gateway)],
+          [`Club fund, ${drop.hostShareBps / 100}%`, money(e.host)],
+          ["Making + delivery", money(e.cost)],
+          ["QUORUM keeps", money(e.net)],
+        ]
+      : [
+          ["Members charged", String(vol?.n ?? 0)],
+          ["Total volume", money(e.volume)],
+          [`To ${drop.brand} (makes the product)`, money(e.brand)],
+          [`QUORUM fee, ${drop.feeBps / 100}%`, money(e.fee)],
+          [`  of which: hosts, ${drop.hostShareBps / 100}%`, money(e.host)],
+          ["  of which: QUORUM keeps", money(e.net)],
+        ];
 
   return (
     <div className="mx-auto max-w-[1320px] px-4 sm:px-8 pt-10 sm:pt-14 grid gap-12 lg:grid-cols-12">
@@ -34,6 +52,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ slug: 
         </Link>
         <p className="label text-ink-2 mt-8">
           {drop.brand} · closed {fmtDate(drop.closesAt)}
+          {drop.practice ? <span className="text-stamp"> · practice drop, simulated members</span> : null}
         </p>
         <h1 className="display text-6xl sm:text-7xl mt-2">{drop.item}</h1>
         {drop.status === "succeeded" ? (
@@ -44,14 +63,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ slug: 
             <div className="mt-10 border-t-2 border-ink">
               <p className="label text-ink-2 py-3">Where the money went — the whole drop</p>
               <dl className="divide-y divide-line border-y border-line font-mono text-sm">
-                {([
-                  ["Members charged", String(vol?.n ?? 0)],
-                  ["Total volume", money(e.volume)],
-                  [`To ${drop.brand} (makes the product)`, money(e.brand)],
-                  [`QUORUM fee, ${rules.feeBps / 100}%`, money(e.fee)],
-                  [`  of which: hosts, ${rules.hostShareBps / 100}%`, money(e.host)],
-                  ["  of which: QUORUM keeps", money(e.net)],
-                ] as [string, string][]).map(([k, v]) => (
+                {rows.map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-4 py-2.5">
                     <dt className={k.startsWith("  ") ? "pl-4 text-ink-3" : "text-ink-2"}>{k.trim()}</dt>
                     <dd className="num">{v}</dd>
@@ -62,7 +74,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ slug: 
           </>
         ) : (
           <p className="mt-6 text-lg text-ink-2 max-w-[50ch]">
-            {drop.status === "canceled" ? "This drop was cancelled before it closed." : `This drop reached ${d.members} of the ${drop.tiers[0]!.min} members it needed.`} Nothing was made and every hold was released — nobody was charged a cent. We publish these too, because a ladder that asks too much too early is worth learning from.
+            {drop.status === "canceled" ? "This drop was cancelled before it closed." : `This drop reached ${d.members} of the ${drop.tiers[0]!.min} members it needed.`} Nothing was made and nobody paid a {CURRENCY === "inr" ? "rupee" : "cent"}. We publish these too, because a ladder that asks too much too early is worth learning from.
           </p>
         )}
       </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DropCard } from "@/components/drop-card";
+import { liveBoard } from "@/lib/board";
 import { listDrops } from "@/lib/drops";
 import { fmtDate } from "@/lib/format";
 import { money } from "@/lib/money";
@@ -14,7 +15,7 @@ export default async function DropsPage({ searchParams }: { searchParams: Promis
   const ctx = await pageCtx();
   const { c } = await searchParams;
   const cat = c && CATEGORIES.includes(c) ? c : null;
-  const [all, closed] = await Promise.all([listDrops(ctx.db, ["live"]), listDrops(ctx.db, ["succeeded", "failed"])]);
+  const [all, closed] = await Promise.all([liveBoard(ctx), listDrops(ctx.db, ["succeeded", "failed"])]);
   const live = cat ? all.filter((d) => d.category === cat) : all;
   // Feature the drop closest to its next tier — that's where one more person matters most.
   const featured = [...live].filter((d) => d.ladder.next).sort((a, b) => a.ladder.next!.needed - b.ladder.next!.needed)[0] ?? live[0];
@@ -86,7 +87,7 @@ export default async function DropsPage({ searchParams }: { searchParams: Promis
                     <span className="display text-2xl">{d.item}</span>
                   </span>
                   <span className={`label ${d.status === "succeeded" ? "text-go" : "text-ink-3"}`}>{d.status === "succeeded" ? "Cleared" : "Missed quorum"}</span>
-                  <span className="font-mono text-sm num hidden sm:block">{d.status === "succeeded" ? `${money(d.finalPriceCents ?? 0)} · ${d.members} in` : `${d.members} of ${d.tiers[0]!.min} — nobody charged`}</span>
+                  <span className="font-mono text-sm num hidden sm:block">{d.status === "succeeded" ? `${money(d.finalPriceCents ?? 0)} · ${d.members} in` : `${d.members} of ${d.tiers[0]!.min} — nobody paid`}</span>
                   <span className="label text-ink-3 hidden sm:block text-right">{fmtDate(d.closesAt)}</span>
                 </Link>
               </li>

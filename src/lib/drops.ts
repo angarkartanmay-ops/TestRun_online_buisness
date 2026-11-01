@@ -4,8 +4,8 @@ import type { DB } from "./db";
 import { dropEvents, drops, pledges, type Drop, type DropStatus } from "./db/schema";
 import { ladderState, type LadderState } from "./tiers";
 
-/** Pledges that count toward the ladder: authorised, being captured, or captured. */
-export const COUNTED = ["held", "capturing", "charged"] as const;
+/** Pledges that count toward the ladder: promised/authorised, being settled, owed, or paid. */
+export const COUNTED = ["held", "capturing", "awaiting_payment", "charged"] as const;
 
 export class DropError extends Error {
   constructor(

@@ -71,11 +71,25 @@ describe("ladder validation", () => {
   });
 });
 
+describe("origin on the plate", () => {
+  it("prefers country codes, else the cities", async () => {
+    const { originCodes } = await import("@/lib/format");
+    expect(originCodes("Denim from Okayama, JP · sewn in Tijuana, MX")).toBe("JP · MX");
+    expect(originCodes("Knit + printed in Tiruppur, Tamil Nadu")).toBe("Tiruppur");
+    expect(originCodes("Printed on demand in Chennai, Tamil Nadu")).toBe("Chennai");
+  });
+});
+
 describe("money", () => {
-  it("formats whole and fractional dollars", () => {
-    expect(money(4100)).toBe("$41");
-    expect(money(2350)).toBe("$23.50");
-    expect(money(123456)).toBe("$1,234.56");
+  it("formats rupees by default, with Indian digit grouping", () => {
+    expect(money(104900)).toBe("₹1,049");
+    expect(money(2350)).toBe("₹23.50");
+    expect(money(12345600)).toBe("₹1,23,456");
+  });
+  it("still formats other currencies for later markets", () => {
+    expect(money(4100, "usd")).toBe("$41");
+    expect(money(123456, "usd")).toBe("$1,234.56");
+    expect(money(2350, "gbp")).toBe("£23.50");
   });
   it("takes basis points", () => {
     expect(bps(2300, 800)).toBe(184);

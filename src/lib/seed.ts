@@ -1,12 +1,18 @@
-import { sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, like, lt, sql } from "drizzle-orm";
 import type { DB } from "./db";
 import { dropEvents, drops, payouts, pledges, users, type NewDrop, type ReceiptLine } from "./db/schema";
+import { money } from "./money";
 import { tierIndexFor } from "./tiers";
 
 /**
- * Sample data for local development and preview deployments. Every seeded
- * account uses the reserved `.invalid` TLD, so none can receive mail or sign in,
- * and `npm run db:reset` removes all of it. Brands and products are fictional.
+ * Practice drops: an Indian campus-merch catalogue for learning how a drop works.
+ * Every one is flagged `practice` (labelled on the site, nobody ever pays), and
+ * every simulated member uses the reserved `.invalid` TLD, so none can receive
+ * mail or sign in. Groups and products are fictional; the costs are real
+ * November 2026 quotes for Tiruppur, Ludhiana and print-on-demand.
+ *
+ * Every ladder is margin-safe: tiers sit where the factory price drops (15 →
+ * small batch, 50 → bulk, 100 → bulk), and each carries its unit cost.
  */
 const H = 3600_000;
 const D = 24 * H;
@@ -18,269 +24,324 @@ type Seed = Omit<NewDrop, "opensAt" | "closesAt" | "shipBy"> & {
   hosted?: boolean;
 };
 
-const r = (label: string, dollars: number, note?: string, ours?: boolean): ReceiptLine => ({
+/** Rupees to paise. */
+const rs = (rupees: number) => Math.round(rupees * 100);
+const line = (label: string, rupees: number, note?: string, ours?: boolean): ReceiptLine => ({
   label,
-  cents: Math.round(dollars * 100),
+  cents: rs(rupees),
   ...(note ? { note } : {}),
   ...(ours ? { ours } : {}),
 });
 
-const SEEDS: Seed[] = [
+const APPAREL_SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
+const HOODIE_SIZES = ["S", "M", "L", "XL", "XXL"];
+
+const house = { kind: "house" as const, practice: true, hostShareBps: 500, feeBps: 0, countryOfOrigin: "India" };
+
+/** Live practice drops. Re-created in a fresh batch whenever fewer than two are open. */
+const LIVE: Seed[] = [
   {
-    slug: "wet-cement-loopback-tee",
-    brand: "Wet Cement",
-    item: "12.4oz Loopback Tee",
-    blurb: "The tee that made the first run sell out at the floor. Same Barcelos mill, same 12.4oz loopback, now in washed charcoal.",
-    spec: "12.4oz loopback cotton · boxy fit · washed charcoal",
-    category: "apparel", glyph: "tshirt", plate: "sage",
-    retailCents: 5800,
-    tiers: [{ min: 10, priceCents: 4100 }, { min: 60, priceCents: 3300 }, { min: 180, priceCents: 2700 }, { min: 400, priceCents: 2300 }],
-    origin: "Knit + dyed in Barcelos, PT", resaleIndex: 0.71,
-    status: "live", closesInHours: 61, members: 287, crewShare: 0.58, hosted: true,
-  },
-  {
-    slug: "nonsuch-selvedge-carpenter",
-    brand: "Nonsuch",
-    item: "14oz Selvedge Carpenter",
-    blurb: "Raw Okayama selvedge cut into a double-knee carpenter. Unwashed, so it fades to the way you move.",
-    spec: "14oz raw selvedge · double knee · hammer loop",
-    category: "apparel", glyph: "pants", plate: "cobalt",
-    retailCents: 16800,
-    tiers: [{ min: 12, priceCents: 12900 }, { min: 50, priceCents: 10800 }, { min: 150, priceCents: 9200 }, { min: 300, priceCents: 7900 }],
-    origin: "Denim from Okayama, JP · sewn in Tijuana, MX", resaleIndex: 0.84,
-    status: "live", closesInHours: 133, members: 142, crewShare: 0.47,
-  },
-  {
-    slug: "overtone-beryllium-iem",
-    brand: "Overtone Audio",
-    item: "Wired IEM, Beryllium Driver",
-    blurb: "Wired is back because the sound never left. A beryllium-coated 10mm driver in machined gunmetal shells.",
-    spec: "10mm beryllium-coated driver · 4-core silver cable · 3.5mm",
-    category: "audio", glyph: "headphones", plate: "smoke",
-    retailCents: 7900,
-    tiers: [{ min: 20, priceCents: 5800 }, { min: 120, priceCents: 4700 }, { min: 400, priceCents: 3900 }, { min: 800, priceCents: 3200 }],
-    origin: "Assembled in Dongguan, CN", resaleIndex: 0.52,
-    receipt: [
-      r("Beryllium-coated 10mm drivers ×2", 6.8),
-      r("CNC aluminium shells ×2", 5.2),
-      r("Braided 4-core cable", 2.1),
-      r("Assembly + QC, Dongguan", 2.4),
-      r("Case + packaging", 1.15),
-      r("Air freight", 0.95),
-      r("US duty, HTS 8518.30.20 @ 4.9%", 0.86, "assessed on $17.65 FOB"),
-      r("Card processing, 2.9% + $0.30", 1.23),
-      r("Overtone's margin", 8.75),
-      r("QUORUM fee, 8%", 2.56, undefined, true),
+    ...house,
+    slug: "batch-27-hoodie",
+    brand: "Batch of '27",
+    item: "Batch Hoodie",
+    blurb: "One hoodie for the whole batch, with the year on the sleeve. 400 GSM brushed fleece — it survives four winters and a hostel washing line.",
+    spec: "400 GSM brushed fleece · oversized · sleeve + back print",
+    category: "apparel", glyph: "hoodie", plate: "cobalt", sizes: HOODIE_SIZES,
+    retailCents: rs(1299),
+    tiers: [
+      { min: 15, priceCents: rs(1049), costCents: rs(715) },
+      { min: 50, priceCents: rs(899), costCents: rs(590) },
+      { min: 100, priceCents: rs(799), costCents: rs(515) },
     ],
-    status: "live", closesInHours: 19, members: 834, crewShare: 0.66, hosted: true,
+    origin: "Knit + stitched in Ludhiana, Punjab",
+    status: "live", closesInHours: 110, members: 38, crewShare: 0.55, hosted: true,
   },
   {
-    slug: "keyhaus-seventy-five",
-    brand: "Keyhaus",
-    item: "Seventy-Five Aluminium Kit",
-    blurb: "A 75% gasket-mount board in a 1.9kg milled case. Hot-swap, so the switches are your call.",
-    spec: "75% layout · gasket mount · hot-swap PCB · 1.9kg",
-    category: "tech", glyph: "keyboard", plate: "mint",
-    retailCents: 23900,
-    tiers: [{ min: 15, priceCents: 18900 }, { min: 60, priceCents: 16400 }, { min: 150, priceCents: 14200 }, { min: 300, priceCents: 12500 }],
-    origin: "Case milled in Shenzhen, CN · PCB assembled in Taipei, TW", resaleIndex: 0.88,
-    receipt: [
-      r("6063 aluminium case, milled + anodised", 38),
-      r("Hot-swap PCB, assembled", 14.5),
-      r("Brass plate + gasket kit", 9.8),
-      r("Packaging + foam", 4.2),
-      r("Ocean freight + drayage", 3.1),
-      r("US duty, HTS 8471.60.20", 0, "keyboards enter duty-free"),
-      r("Card processing, 2.9% + $0.30", 3.93),
-      r("Keyhaus's margin", 41.47),
-      r("QUORUM fee, 8%", 10, undefined, true),
+    ...house,
+    slug: "fest-crew-tee",
+    brand: "Rang Fest Crew",
+    item: "Crew Oversized Tee",
+    blurb: "The tee the fest crew wears so everyone knows who to ask. Heavy enough not to go see-through under stage lights.",
+    spec: "240 GSM combed cotton · oversized · 2-colour screen print",
+    category: "apparel", glyph: "tshirt", plate: "sage", sizes: APPAREL_SIZES,
+    retailCents: rs(799),
+    tiers: [
+      { min: 15, priceCents: rs(649), costCents: rs(415) },
+      { min: 50, priceCents: rs(549), costCents: rs(365) },
+      { min: 100, priceCents: rs(479), costCents: rs(320) },
     ],
-    status: "live", closesInHours: 88, members: 96, crewShare: 0.71,
+    origin: "Knit + printed in Tiruppur, Tamil Nadu",
+    status: "live", closesInHours: 43, members: 57, crewShare: 0.62,
   },
   {
-    slug: "halfmoon-acetate-frames",
-    brand: "Halfmoon Optics",
-    item: "Acetate Frames, Blue-Block",
-    blurb: "Chunky tortoiseshell acetate, cut and tumbled for three days in Cadore. Needs six more to open.",
-    spec: "Mazzucchelli acetate · 5-barrel hinge · blue-block lens",
-    category: "objects", glyph: "eyeglasses", plate: "butter",
-    retailCents: 14500,
-    tiers: [{ min: 25, priceCents: 9800 }, { min: 100, priceCents: 8100 }, { min: 250, priceCents: 6900 }, { min: 500, priceCents: 5800 }],
-    origin: "Acetate cut + tumbled in Cadore, IT", resaleIndex: 0.61,
-    status: "live", closesInHours: 104, members: 19, crewShare: 0.32,
-  },
-  {
-    slug: "pale-machine-merino-beanie",
-    brand: "Pale Machine",
-    item: "Merino Rib Beanie",
-    blurb: "Fisherman cut in a burnt orange you'll be asked about. Biella yarn, knit in Porto.",
-    spec: "100% extrafine merino · 2×2 rib · short cuff",
-    category: "apparel", glyph: "yarn", plate: "clay",
-    retailCents: 5200,
-    tiers: [{ min: 10, priceCents: 3600 }, { min: 40, priceCents: 3000 }, { min: 120, priceCents: 2500 }, { min: 300, priceCents: 2100 }],
-    origin: "Yarn spun in Biella, IT · knit in Porto, PT", resaleIndex: 0.44,
-    status: "live", closesInHours: 44, members: 133, crewShare: 0.52,
-  },
-  {
-    slug: "civic-duty-cordura-tote",
-    brand: "Civic Duty",
-    item: "1000D Cordura Tote",
-    blurb: "Stands up on its own and outlives the laptop inside it. Two more members and it drops $12.",
-    spec: "1000D Cordura · bar-tacked webbing · zip pocket",
-    category: "bags", glyph: "tote", plate: "stone",
-    retailCents: 9500,
-    tiers: [{ min: 15, priceCents: 6800 }, { min: 60, priceCents: 5600 }, { min: 150, priceCents: 4700 }, { min: 300, priceCents: 4000 }],
-    origin: "Cut + sewn in Ho Chi Minh City, VN", resaleIndex: 0.66,
-    status: "live", closesInHours: 9, members: 58, crewShare: 0.6,
-  },
-  {
-    slug: "second-sunday-stoneware",
-    brand: "Second Sunday",
-    item: "Stoneware Mugs, Set of Two",
-    blurb: "One oatmeal, one cobalt, both slightly wrong in the way handmade things are.",
-    spec: "Hand-thrown stoneware · 340ml · dishwasher safe",
-    category: "objects", glyph: "coffee", plate: "rust",
-    retailCents: 6800,
-    tiers: [{ min: 12, priceCents: 4700 }, { min: 40, priceCents: 3900 }, { min: 100, priceCents: 3300 }, { min: 250, priceCents: 2800 }],
-    origin: "Thrown in Stoke-on-Trent, UK", resaleIndex: 0.29,
-    status: "live", closesInHours: 140, members: 41, crewShare: 0.41,
-  },
-  {
-    slug: "wet-cement-tee-run-01",
-    brand: "Wet Cement",
-    item: "12.4oz Loopback Tee — Run 01",
-    blurb: "The first run. Closed at 512 members on the floor tier.",
-    spec: "12.4oz loopback cotton · boxy fit · bone",
-    category: "apparel", glyph: "tshirt", plate: "sage",
-    retailCents: 5800,
-    tiers: [{ min: 10, priceCents: 4100 }, { min: 60, priceCents: 3300 }, { min: 180, priceCents: 2700 }, { min: 400, priceCents: 2300 }],
-    origin: "Knit + dyed in Barcelos, PT", resaleIndex: 0.71,
-    receipt: [
-      r("Cotton knit blank, 12.4oz, Barcelos PT", 9.1),
-      r("Cut & sew, 14 operations", 3.4),
-      r("Reactive dye, single-colour lot", 1.15),
-      r("Ocean freight + drayage", 0.62, "consolidated at 1,400 units"),
-      r("US duty, HTS 6109.10.00 @ 16.5%", 1.79, "assessed on $10.85 FOB"),
-      r("Card processing, 2.9% + $0.30", 0.97),
-      r("Wet Cement's margin", 4.13),
-      r("QUORUM fee, 8%", 1.84, undefined, true),
+    ...house,
+    slug: "lit-soc-tote",
+    brand: "Lit Soc",
+    item: "Society Canvas Tote",
+    blurb: "The society logo on 12 oz canvas that holds a laptop, two textbooks and a canteen run. Six more and it opens.",
+    spec: "12 oz natural canvas · 1-colour print · inner pocket",
+    category: "bags", glyph: "tote", plate: "butter", sizes: [],
+    retailCents: rs(499),
+    tiers: [
+      { min: 15, priceCents: rs(399), costCents: rs(245) },
+      { min: 50, priceCents: rs(329), costCents: rs(195) },
+      { min: 100, priceCents: rs(279), costCents: rs(165) },
     ],
-    status: "succeeded", closesInHours: -21 * 24, members: 512, crewShare: 0.61, hosted: true,
+    origin: "Cut + printed in Erode, Tamil Nadu",
+    status: "live", closesInHours: 136, members: 9, crewShare: 0.4,
   },
   {
-    slug: "rook-waxed-field-jacket",
-    brand: "Rook Supply",
-    item: "Waxed Canvas Field Jacket",
-    blurb: "Missed quorum at 11 of 20. Nothing was made and nobody was charged — the ladder asked too much too early.",
-    spec: "8oz waxed cotton canvas · corduroy collar",
-    category: "apparel", glyph: "coat", plate: "smoke",
-    retailCents: 26000,
-    tiers: [{ min: 20, priceCents: 19800 }, { min: 80, priceCents: 17400 }, { min: 200, priceCents: 15200 }],
-    origin: "Canvas from Halley Stevensons, Dundee · sewn in Leicester, UK", resaleIndex: 0.58,
-    status: "failed", closesInHours: -9 * 24, members: 11, crewShare: 0.2,
+    ...house,
+    hostShareBps: 0,
+    slug: "friends-test-tee",
+    brand: "Your Group Chat",
+    item: "Friends Test Tee",
+    blurb: "The test drop. Five friends open it; fifteen get it at ₹549. Printed one at a time and shipped to each of you, so there's no minimum order to miss.",
+    spec: "180 GSM cotton · regular fit · front print, printed on demand",
+    category: "apparel", glyph: "tshirt", plate: "clay", sizes: APPAREL_SIZES,
+    retailCents: rs(799),
+    tiers: [
+      { min: 5, priceCents: rs(699), costCents: rs(386) },
+      { min: 10, priceCents: rs(599), costCents: rs(386) },
+      { min: 15, priceCents: rs(549), costCents: rs(386) },
+    ],
+    origin: "Printed on demand in Chennai, Tamil Nadu",
+    status: "live", closesInHours: 66, members: 7, crewShare: 0.3,
   },
 ];
 
-export async function seedDemo(db: DB, now = new Date()) {
-  const maxMembers = Math.max(...SEEDS.map((s) => s.members));
-  const pool = await db
-    .insert(users)
-    .values(
-      Array.from({ length: maxMembers }, (_, i) => ({
-        email: `member-${String(i + 1).padStart(4, "0")}@demo.quorum.invalid`,
-        crewCode: `demo${(i + 1).toString(36).padStart(3, "0")}`,
-      })),
-    )
-    .onConflictDoNothing()
-    .returning({ id: users.id });
+/** Closed examples, seeded once: one cleared drop with its published receipt, one that missed. */
+const HISTORY: Seed[] = [
+  {
+    ...house,
+    slug: "freshers-26-tee",
+    brand: "Freshers '26",
+    item: "Freshers Tee",
+    blurb: "Closed at 112 members on the floor tier. Every rupee of the ₹479 is on the receipt.",
+    spec: "240 GSM combed cotton · regular fit · 2-colour screen print",
+    category: "apparel", glyph: "tshirt", plate: "stone", sizes: APPAREL_SIZES,
+    retailCents: rs(799),
+    tiers: [
+      { min: 15, priceCents: rs(649), costCents: rs(415) },
+      { min: 50, priceCents: rs(549), costCents: rs(365) },
+      { min: 100, priceCents: rs(479), costCents: rs(320) },
+    ],
+    origin: "Knit + printed in Tiruppur, Tamil Nadu",
+    receipt: [
+      line("240 GSM combed-cotton blank", 186, "Tiruppur, at 112 pieces"),
+      line("Screen print, 2 colours, front + back", 72),
+      line("Bulk courier to campus", 22, "one parcel, split per tee"),
+      line("Fold, size sticker, poly bag", 10),
+      line("Misprint + exchange reserve", 30),
+      line("GST on the garment, 5%", 22.81, "included in the price"),
+      line("Payment gateway, 2.36%", 11.3),
+      line("Club fund, 5%", 23.95, "paid to Freshers '26"),
+      line("QUORUM margin", 100.94, undefined, true),
+    ],
+    status: "succeeded", closesInHours: -12 * 24, members: 112, crewShare: 0.6, hosted: true,
+  },
+  {
+    ...house,
+    slug: "design-dept-varsity",
+    brand: "Dept. of Design",
+    item: "Varsity Jacket",
+    blurb: "Missed quorum at 9 of 15. Nothing was made and nobody paid — ₹2,199 was too much to ask of a 40-person class.",
+    spec: "Wool-blend body · faux-leather sleeves · chenille patch",
+    category: "apparel", glyph: "coat", plate: "rust", sizes: HOODIE_SIZES,
+    retailCents: rs(2799),
+    tiers: [
+      { min: 15, priceCents: rs(2199), costCents: rs(1350) },
+      { min: 40, priceCents: rs(1899), costCents: rs(1180) },
+      { min: 80, priceCents: rs(1699), costCents: rs(1060) },
+    ],
+    origin: "Stitched in Ludhiana, Punjab",
+    status: "failed", closesInHours: -6 * 24, members: 9, crewShare: 0.2,
+  },
+];
 
-  const [host] = await db
+/** The previous, pre-India sample catalogue. Removed on the next refresh if nobody real joined it. */
+const LEGACY_SLUGS = [
+  "wet-cement-loopback-tee", "nonsuch-selvedge-carpenter", "overtone-beryllium-iem", "keyhaus-seventy-five",
+  "halfmoon-acetate-frames", "pale-machine-merino-beanie", "civic-duty-cordura-tote", "second-sunday-stoneware",
+  "wet-cement-tee-run-01", "rook-waxed-field-jacket",
+];
+
+const POOL_SIZE = Math.max(...[...LIVE, ...HISTORY].map((s) => s.members));
+const memberEmail = (i: number) => `member-${String(i + 1).padStart(4, "0")}@demo.quorum.invalid`;
+
+/** The simulated members, created once and reused by every batch. */
+async function memberPool(db: DB) {
+  await db
     .insert(users)
-    .values({ email: "host@demo.quorum.invalid", crewCode: "demohost", hostStatus: "approved" })
+    .values(Array.from({ length: POOL_SIZE }, (_, i) => ({ email: memberEmail(i), crewCode: `demo${(i + 1).toString(36).padStart(3, "0")}` })))
+    .onConflictDoNothing();
+  await db.insert(users).values({ email: "host@demo.quorum.invalid", crewCode: "demohost", hostStatus: "approved" }).onConflictDoNothing();
+  const pool = await db.select({ id: users.id }).from(users).where(like(users.email, "member-%@demo.quorum.invalid")).orderBy(asc(users.email));
+  const [host] = await db.select({ id: users.id }).from(users).where(eq(users.email, "host@demo.quorum.invalid")).limit(1);
+  return { pool: pool.slice(0, POOL_SIZE), hostId: host?.id ?? null };
+}
+
+async function insertSeed(db: DB, s: Seed, now: Date, slugSuffix: string, pool: { id: string }[], hostId: string | null) {
+  const { closesInHours, members, crewShare, hosted, ...fields } = s;
+  const closesAt = new Date(now.getTime() + closesInHours * H);
+  const windowH = 144;
+  const opensAt = new Date(closesAt.getTime() - windowH * H);
+  const unlocked = tierIndexFor(s.tiers, members);
+  const settled = s.status === "succeeded" || s.status === "failed";
+  const finalPrice = s.status === "succeeded" && unlocked >= 0 ? s.tiers[unlocked]!.priceCents : null;
+
+  const [drop] = await db
+    .insert(drops)
+    .values({
+      ...fields,
+      slug: `${s.slug}${slugSuffix}`,
+      opensAt,
+      closesAt,
+      shipBy: new Date(closesAt.getTime() + 21 * D),
+      unlockedTier: unlocked,
+      hostUserId: hosted ? hostId : null,
+      finalPriceCents: finalPrice,
+      settledAt: settled ? new Date(closesAt.getTime() + 2 * H) : null,
+      shippedAt: s.status === "succeeded" ? new Date(closesAt.getTime() + 9 * D) : null,
+    })
     .onConflictDoNothing()
     .returning();
-  const referrers = pool.slice(0, 40).map((u) => u.id);
+  if (!drop) return null;
 
-  for (const s of SEEDS) {
-    const { closesInHours, members, crewShare, hosted, ...fields } = s;
-    const closesAt = new Date(now.getTime() + closesInHours * H);
-    const windowH = Math.min(144, Math.max(48, closesInHours + 30));
-    const opensAt = new Date(closesAt.getTime() - windowH * H);
-    const unlocked = tierIndexFor(s.tiers, members);
-    const settled = s.status === "succeeded" || s.status === "failed";
-    const finalPrice = s.status === "succeeded" && unlocked >= 0 ? s.tiers[unlocked]!.priceCents : null;
+  const referrers = pool.slice(0, 20).map((u) => u.id);
+  const span = Math.max(1, Math.min(now.getTime(), closesAt.getTime()) - opensAt.getTime());
+  const sizes = s.sizes ?? [];
+  const rows = pool.slice(0, members).map((u, i) => {
+    const joinedAt = new Date(opensAt.getTime() + Math.floor((span * (i + 0.5)) / members));
+    const priceAtJoin = s.tiers[Math.max(0, tierIndexFor(s.tiers, i))]!.priceCents;
+    return {
+      dropId: drop.id,
+      userId: u.id,
+      status: s.status === "succeeded" ? ("charged" as const) : s.status === "failed" ? ("released" as const) : ("held" as const),
+      heldCents: priceAtJoin,
+      chargedCents: finalPrice,
+      referrerId: (i * 7919) % 100 < crewShare * 100 ? referrers[(i * 31) % referrers.length]! : null,
+      provider: "demo" as const,
+      providerRef: `demo_seed_${drop.slug}_${i}`,
+      // Sizes skew to the middle, like a real batch: M and L are about half.
+      size: sizes.length ? sizes[[1, 2, 2, 3, 3, 2, 4, 1, 3, 0, 5, 2][i % 12]! % sizes.length]! : null,
+      releaseReason: s.status === "failed" ? "missed_quorum" : null,
+      createdAt: joinedAt,
+      updatedAt: joinedAt,
+      heldAt: joinedAt,
+      settledAt: settled ? drop.settledAt : null,
+    };
+  });
+  for (let i = 0; i < rows.length; i += 400) await db.insert(pledges).values(rows.slice(i, i + 400));
 
-    const [drop] = await db
-      .insert(drops)
-      .values({
-        ...fields,
-        opensAt,
-        closesAt,
-        shipBy: new Date(closesAt.getTime() + 42 * D),
-        unlockedTier: unlocked,
-        hostUserId: hosted && host ? host.id : null,
-        finalPriceCents: finalPrice,
-        settledAt: settled ? new Date(closesAt.getTime() + 2 * H) : null,
-      })
-      .onConflictDoNothing()
-      .returning();
-    if (!drop) continue;
-
-    const span = Math.max(1, Math.min(now.getTime(), closesAt.getTime()) - opensAt.getTime());
-    const rows = pool.slice(0, members).map((u, i) => {
-      const joinedAt = new Date(opensAt.getTime() + Math.floor((span * (i + 0.5)) / members));
-      const priceAtJoin = s.tiers[Math.max(0, tierIndexFor(s.tiers, i))]!.priceCents;
-      return {
-        dropId: drop.id,
-        userId: u.id,
-        status: s.status === "succeeded" ? ("charged" as const) : s.status === "failed" ? ("released" as const) : ("held" as const),
-        heldCents: priceAtJoin,
-        chargedCents: finalPrice,
-        referrerId: (i * 7919) % 100 < crewShare * 100 ? referrers[(i * 31) % referrers.length]! : null,
-        provider: "demo" as const,
-        providerRef: `demo_seed_${drop.slug}_${i}`,
-        releaseReason: s.status === "failed" ? "missed_quorum" : null,
-        createdAt: joinedAt,
-        updatedAt: joinedAt,
-        heldAt: joinedAt,
-        settledAt: settled ? drop.settledAt : null,
-      };
+  // Event history: tier unlocks at the moment each threshold was crossed, plus recent joins.
+  const events: { dropId: string; kind: "joined" | "tier_unlocked" | "closed"; label: string; createdAt: Date }[] = [];
+  s.tiers.forEach((t, i) => {
+    const row = rows[t.min - 1];
+    if (!row) return;
+    events.push({
+      dropId: drop.id,
+      kind: "tier_unlocked",
+      label: i === 0 ? `Quorum met — opens at ${money(t.priceCents)}` : `Tier ${i + 1} unlocked — ${money(t.priceCents)} for everyone`,
+      createdAt: new Date(row.createdAt.getTime() + 1000),
     });
-    for (let i = 0; i < rows.length; i += 400) await db.insert(pledges).values(rows.slice(i, i + 400));
-
-    // Event history: tier unlocks at the moment each threshold was crossed, plus recent joins.
-    const events: { dropId: string; kind: "joined" | "tier_unlocked" | "closed"; label: string; createdAt: Date }[] = [];
-    s.tiers.forEach((t, i) => {
-      const row = rows[t.min - 1];
-      if (!row) return;
-      events.push({
-        dropId: drop.id,
-        kind: "tier_unlocked",
-        label: i === 0 ? `Quorum met — opens at $${t.priceCents / 100}` : `Tier ${i + 1} unlocked — $${t.priceCents / 100} for everyone`,
-        createdAt: new Date(row.createdAt.getTime() + 1000),
-      });
+  });
+  rows.slice(-5).forEach((row) =>
+    events.push({ dropId: drop.id, kind: "joined", label: row.referrerId ? "Joined from a crew link" : "Joined", createdAt: row.createdAt }),
+  );
+  if (settled) {
+    events.push({
+      dropId: drop.id,
+      kind: "closed",
+      label: s.status === "succeeded" ? `Closed at ${money(finalPrice ?? 0)} — ${members} members` : `Missed quorum — ${members} in, nobody pays`,
+      createdAt: drop.settledAt!,
     });
-    rows.slice(-5).forEach((row) =>
-      events.push({ dropId: drop.id, kind: "joined", label: row.referrerId ? "Joined from a crew link" : "Joined", createdAt: row.createdAt }),
-    );
-    if (settled) {
-      events.push({
-        dropId: drop.id,
-        kind: "closed",
-        label: s.status === "succeeded" ? `Closed at $${(finalPrice ?? 0) / 100} — ${members} members charged` : `Missed quorum — ${members} holds released, nobody charged`,
-        createdAt: drop.settledAt!,
-      });
-    }
-    await db.insert(dropEvents).values(events);
-
-    if (s.status === "succeeded" && host && finalPrice) {
-      const direct = rows.filter((row) => !row.referrerId).length;
-      await db
-        .insert(payouts)
-        .values({ hostUserId: host.id, dropId: drop.id, members: direct, volumeCents: direct * finalPrice, amountCents: Math.round(direct * finalPrice * 0.03), status: "paid", paidAt: new Date(closesAt.getTime() + 14 * D) })
-        .onConflictDoNothing();
-    }
   }
+  await db.insert(dropEvents).values(events);
+
+  if (s.status === "succeeded" && hosted && hostId && finalPrice) {
+    const direct = rows.filter((row) => !row.referrerId).length;
+    await db
+      .insert(payouts)
+      .values({
+        hostUserId: hostId,
+        dropId: drop.id,
+        members: direct,
+        volumeCents: direct * finalPrice,
+        amountCents: Math.round((direct * finalPrice * (s.hostShareBps ?? 500)) / 10_000),
+        status: "paid",
+        paidAt: new Date(closesAt.getTime() + 14 * D),
+      })
+      .onConflictDoNothing();
+  }
+  return drop;
+}
+
+/** First boot: the full practice catalogue — live drops plus the two closed examples. */
+export async function seedDemo(db: DB, now = new Date()) {
+  const { pool, hostId } = await memberPool(db);
+  for (const s of [...LIVE, ...HISTORY]) await insertSeed(db, s, now, "", pool, hostId);
+}
+
+/**
+ * Keep the board from ever going empty. Run by the daily cron when practice drops
+ * are enabled: retires the old sample catalogue, deletes closed practice drops
+ * after three weeks (keeping the newest cleared and missed examples), and opens
+ * a fresh batch whenever fewer than two practice drops are still open.
+ */
+export async function refreshPracticeDrops(db: DB, now = new Date()): Promise<{ created: number; removed: number }> {
+  let removed = 0;
+
+  // 1. The pre-India sample catalogue, unless a real (non-.invalid) member joined it.
+  const legacy = await db
+    .delete(drops)
+    .where(
+      and(
+        inArray(drops.slug, LEGACY_SLUGS),
+        eq(drops.practice, false),
+        sql`not exists (select 1 from pledges p join users u on u.id = p.user_id where p.drop_id = ${drops.id} and u.email not like '%.invalid')`,
+      ),
+    )
+    .returning({ id: drops.id });
+  removed += legacy.length;
+
+  // 2. Closed practice drops older than three weeks, except the newest of each outcome.
+  const keep: string[] = [];
+  for (const status of ["succeeded", "failed"] as const) {
+    const [newest] = await db
+      .select({ id: drops.id })
+      .from(drops)
+      .where(and(eq(drops.practice, true), eq(drops.status, status)))
+      .orderBy(desc(drops.closesAt))
+      .limit(1);
+    if (newest) keep.push(newest.id);
+  }
+  const stale = await db
+    .delete(drops)
+    .where(
+      and(
+        eq(drops.practice, true),
+        inArray(drops.status, ["succeeded", "failed", "canceled"]),
+        lt(drops.closesAt, new Date(now.getTime() - 21 * D)),
+        keep.length ? sql`${drops.id} not in (${sql.join(keep.map((k) => sql`${k}`), sql`, `)})` : sql`true`,
+      ),
+    )
+    .returning({ id: drops.id });
+  removed += stale.length;
+
+  // 3. A fresh batch when the board is running low.
+  const [open] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(drops)
+    .where(and(eq(drops.practice, true), eq(drops.status, "live"), gt(drops.closesAt, now)));
+  let created = 0;
+  if ((open?.n ?? 0) < 2) {
+    const { pool, hostId } = await memberPool(db);
+    const suffix = `-${now.toISOString().slice(2, 13).replace(/[-T]/g, "")}`; // 2026-11-04T13 → "-26110413"
+    for (const s of LIVE) if (await insertSeed(db, s, now, suffix, pool, hostId)) created++;
+  }
+  return { created, removed };
 }
 
 /**

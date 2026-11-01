@@ -19,13 +19,13 @@ export function HostApplyForm() {
   const e = state?.errors ?? {};
   return (
     <form onSubmit={onSubmit} className="grid gap-5" noValidate>
-      <Field id="groupName" label="Your group" error={e.groupName} hint="The chat, server, club or class.">
-        <input id="groupName" name="groupName" className="field" placeholder="Bloc Climbing — Tuesday crew" aria-invalid={e.groupName ? true : undefined} />
+      <Field id="groupName" label="Your group" error={e.groupName} hint="The batch, club, society, fest crew or friend group.">
+        <input id="groupName" name="groupName" className="field" placeholder="Batch of '27, Mechanical" aria-invalid={e.groupName ? true : undefined} />
       </Field>
       <Field id="groupSize" label="People in it" error={e.groupSize}>
-        <input id="groupSize" name="groupSize" type="number" inputMode="numeric" className="field" placeholder="310" aria-invalid={e.groupSize ? true : undefined} />
+        <input id="groupSize" name="groupSize" type="number" inputMode="numeric" className="field" placeholder="120" aria-invalid={e.groupSize ? true : undefined} />
       </Field>
-      <Field id="brief" label="One thing they'd buy, and at what price" error={e.brief} hint='An item, not a category: "a heavyweight black crewneck at $40".'>
+      <Field id="brief" label="One thing they'd buy, and at what price" error={e.brief} hint='An item, not a category: "a navy batch hoodie with our year on the sleeve, around ₹900".'>
         <textarea id="brief" name="brief" className="field" aria-invalid={e.brief ? true : undefined} />
       </Field>
       <Status state={state} />
@@ -51,12 +51,12 @@ export function BrandApplyForm() {
         </Field>
       </div>
       <Field id="item" label="The item" error={e.item}>
-        <input id="item" name="item" className="field" placeholder="14oz selvedge carpenter pant" aria-invalid={e.item ? true : undefined} />
+        <input id="item" name="item" className="field" placeholder="240 GSM oversized tee, 2-colour print" aria-invalid={e.item ? true : undefined} />
       </Field>
       <Field id="factory" label="Factory and city" error={e.factory} hint="Required. Every drop names its maker.">
-        <input id="factory" name="factory" className="field" placeholder="Kaihara Denim, Fukuyama · sewn in Tijuana" aria-invalid={e.factory ? true : undefined} />
+        <input id="factory" name="factory" className="field" placeholder="Knit + printed in Tiruppur, Tamil Nadu" aria-invalid={e.factory ? true : undefined} />
       </Field>
-      <Field id="unitCost" label="Landed unit cost at 300 units (optional)" error={e.unitCost} hint="In dollars. Helps us propose a ladder you can actually hit.">
+      <Field id="unitCost" label="Landed unit cost at 300 units (optional)" error={e.unitCost} hint="In rupees, including delivery. Helps us propose a ladder you can actually hit.">
         <input id="unitCost" name="unitCost" type="number" step="0.01" inputMode="decimal" className="field" aria-invalid={e.unitCost ? true : undefined} />
       </Field>
       <Field id="notes" label="Anything else" error={e.notes}>

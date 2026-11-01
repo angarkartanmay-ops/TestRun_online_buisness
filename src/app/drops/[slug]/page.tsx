@@ -1,18 +1,20 @@
-import { CalendarCheck, Factory, Hourglass, Lock, Receipt as ReceiptIcon, Recycle, TrendDown } from "@phosphor-icons/react/dist/ssr";
-import { and, eq, inArray } from "drizzle-orm";
+import { CalendarCheck, Factory, Flag, Hourglass, Lock, Receipt as ReceiptIcon, Recycle, Ruler, TrendDown } from "@phosphor-icons/react/dist/ssr";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { after } from "next/server";
 import { plateStamp } from "@/components/drop-card";
 import { LivePanel } from "@/components/live-panel";
+import { PayBox } from "@/components/pay-box";
 import { SpecimenPlate } from "@/components/plate";
 import { Receipt } from "@/components/receipt";
-import { config } from "@/lib/config";
-import { pledges } from "@/lib/db/schema";
+import { config, payStyle } from "@/lib/config";
+import { drops, pledges } from "@/lib/db/schema";
 import { getDropBySlug, isDueForSettlement, liveState, withLadder } from "@/lib/drops";
 import { fmtDate } from "@/lib/format";
-import { money } from "@/lib/money";
+import { CURRENCY, money } from "@/lib/money";
+import { payCopy } from "@/lib/pay-copy";
 import { canLeave } from "@/lib/pledges";
 import { rules } from "@/lib/rules";
 import { getCtx, pageCtx } from "@/lib/server-ctx";
@@ -55,21 +57,27 @@ export default async function DropPage({ params }: Params) {
   if (!drop || drop.status === "draft") notFound();
   const now = ctx.now();
   if (isDueForSettlement(drop, now)) after(() => settleDrop(ctx, drop.id).then(() => undefined));
+  // Pilot funnel: count the view after responding. Approximate by design (bots, refreshes).
+  after(() => ctx.db.update(drops).set({ views: sql`${drops.views} + 1` }).where(eq(drops.id, drop.id)).then(() => undefined));
 
   const [user, state, d] = await Promise.all([getSessionUser(), liveState(ctx, drop), withLadder(ctx.db, drop)]);
   const [mine] = user
     ? await ctx.db
         .select()
         .from(pledges)
-        .where(and(eq(pledges.dropId, drop.id), eq(pledges.userId, user.id), inArray(pledges.status, ["pending", "held", "capturing", "charged"])))
+        .where(and(eq(pledges.dropId, drop.id), eq(pledges.userId, user.id), inArray(pledges.status, ["pending", "held", "capturing", "awaiting_payment", "charged"])))
         .limit(1)
     : [];
+  const copy = payCopy(payStyle, drop.practice);
+  const house = drop.kind === "house";
 
   const facts: [typeof Factory, string, string][] = [
     [Factory, "Made", drop.origin],
+    [Flag, "Origin", `Made in ${drop.countryOfOrigin}`],
     [CalendarCheck, "Ships by", `${fmtDate(drop.shipBy)} — or a full refund`],
     [Hourglass, "Window", `${Math.round((drop.closesAt.getTime() - drop.opensAt.getTime()) / 3600_000)} hours, closes ${fmtDate(drop.closesAt)}`],
   ];
+  if (drop.sizes.length) facts.push([Ruler, "Sizes", drop.sizes.join(" · ")]);
   if (drop.resaleIndex != null) {
     facts.push([Recycle, "Resale index", `${drop.resaleIndex.toFixed(2)} — secondhand price ÷ retail, last 90 days`]);
   }
@@ -93,6 +101,12 @@ export default async function DropPage({ params }: Params) {
         </div>
 
         <div className="lg:col-span-6 grid gap-8 content-start">
+          {drop.practice ? (
+            <p className="border-2 border-dashed border-ink px-4 py-3 text-sm">
+              <b className="label text-stamp mr-2">Practice drop</b>
+              The members on this drop are simulated and nobody pays — it&apos;s here so you can see how the price moves. Real drops don&apos;t carry this label.
+            </p>
+          ) : null}
           <header>
             <p className="label text-ink-2">{drop.brand}</p>
             <h1 className="display text-5xl sm:text-7xl mt-2">{drop.item}</h1>
@@ -115,21 +129,29 @@ export default async function DropPage({ params }: Params) {
             }
             siteUrl={config.siteUrl}
             leaveGraceMinutes={rules.leaveGraceMinutes}
+            payStyle={payStyle}
+            practice={drop.practice}
+            sizes={drop.sizes}
+            payBox={mine?.status === "awaiting_payment" ? <PayBox ctx={ctx} pledge={mine} /> : undefined}
           />
+          <p className="text-xs text-ink-3 -mt-4">
+            {house
+              ? "All-in prices: GST and delivery to your campus are included. No fees at checkout."
+              : "Prices include taxes. Shipping, if any, is shown before you pay."}{" "}
+            <Link href="/legal/shipping-returns" className="underline">
+              Shipping, sizes &amp; returns
+            </Link>
+          </p>
 
           {/* On phones the facts follow the price and the join button, not precede them. */}
           <Facts facts={facts} className="lg:hidden" />
 
           <section aria-labelledby="hold-how" className="border-t-2 border-ink pt-6">
             <h2 id="hold-how" className="label text-ink-2 mb-4">
-              What happens to your card
+              {drop.practice ? "What would happen to your money" : copy.stepsTitle}
             </h2>
             <ol className="grid sm:grid-cols-3 gap-5">
-              {[
-                [Lock, "Now", `A hold at the current price — ${money(state.ladder.holdCents)}. Not a charge.`],
-                [TrendDown, `At close, ${fmtDate(drop.closesAt)}`, "We charge the closing price, equal or lower. Your bank releases the rest."],
-                [CalendarCheck, `By ${fmtDate(drop.shipBy)}`, "It ships — or every member is refunded in full."],
-              ].map(([Icon, k, v]) => {
+              {copy.steps(money(state.ladder.holdCents), fmtDate(drop.closesAt), fmtDate(drop.shipBy)).map(([k, v], i) => [[Lock, TrendDown, CalendarCheck][i]!, k, v] as const).map(([Icon, k, v]) => {
                 const I = Icon as typeof Lock;
                 return (
                   <li key={k as string} className="grid gap-1.5">
@@ -150,12 +172,16 @@ export default async function DropPage({ params }: Params) {
             <ReceiptIcon size={14} /> {drop.status === "succeeded" ? "Published receipt" : "Cost sheet"}
           </p>
           <h2 id="cost-sheet" className="display text-5xl mt-2">
-            {drop.receipt.length ? "Every cent, at the floor price" : "Published when it clears"}
+            {drop.receipt.length ? `Every ${CURRENCY === "inr" ? "rupee" : "cent"}, at the price it closed at` : "Published when it clears"}
           </h2>
           <p className="mt-4 text-ink-2 max-w-[44ch]">
-            {drop.receipt.length
-              ? `This is ${drop.brand}'s verified cost sheet at the lowest tier. Our ${rules.feeBps / 100}% is the red line — it's the only money QUORUM makes.`
-              : `${drop.brand} has named the factory. The full line-by-line cost sheet — materials, labour, freight, duty, their margin and our ${rules.feeBps / 100}% — is published the moment this drop clears.`}
+            {house
+              ? drop.receipt.length
+                ? "Blank, print, courier, GST, the gateway, the club fund — and our margin, the red line. It's the only money QUORUM makes."
+                : "The factory is named above. The full line-by-line cost sheet — blank, print, courier, GST, the club fund and our margin — is published the moment this drop clears."
+              : drop.receipt.length
+                ? `This is ${drop.brand}'s verified cost sheet at the lowest tier. Our ${drop.feeBps / 100}% is the red line — it's the only money QUORUM makes.`
+                : `${drop.brand} has named the factory. The full line-by-line cost sheet — materials, labour, freight, duty, their margin and our ${drop.feeBps / 100}% — is published the moment this drop clears.`}
           </p>
         </div>
         {drop.receipt.length ? (

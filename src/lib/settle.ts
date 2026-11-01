@@ -1,12 +1,14 @@
-import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Ctx } from "./ctx";
-import { drops, payouts, pledges, users, type Drop } from "./db/schema";
-import { getDrop, logEvent } from "./drops";
+import { drops, payouts, pledges, users, type Drop, type Pledge } from "./db/schema";
+import { DropError, getDrop, logEvent } from "./drops";
 import { deliver, mails } from "./email";
 import { bps, money } from "./money";
 import { applyRatchet } from "./pledges";
+import { paymentsFor } from "./payments/for";
 import { HoldExpiredError } from "./payments/types";
 import { rules } from "./rules";
+import { payRef, upiLink } from "./upi";
 
 export type SettleOutcome =
   | { dropId: string; result: "skipped" }
@@ -42,7 +44,7 @@ export async function settleDrop(ctx: Ctx, dropId: string): Promise<SettleOutcom
     .set({ status: "released", releaseReason: "never_confirmed", settledAt: now, updatedAt: now })
     .where(and(eq(pledges.dropId, drop.id), eq(pledges.status, "pending")))
     .returning();
-  for (const p of pending) if (p.providerRef) await safeRelease(ctx, p.providerRef, p.id);
+  for (const p of pending) if (p.providerRef) await safeRelease(ctx, p);
 
   return fresh.unlockedTier >= 0 ? captureAll(ctx, fresh) : releaseAll(ctx, fresh, "missed_quorum");
 }
@@ -71,8 +73,12 @@ async function captureAll(ctx: Ctx, drop: Drop): Promise<SettleOutcome> {
 
     // The ratchet guarantees final <= held; min() is belt and braces.
     const amount = Math.min(finalPriceCents, p.heldCents);
+    if (p.provider === "commit") {
+      await requestPayment(ctx, drop, p, amount);
+      continue;
+    }
     try {
-      if (p.providerRef) await ctx.payments.capture(p.providerRef, amount, `capture-${p.id}`);
+      if (p.providerRef) await paymentsFor(ctx, p.provider).capture(p.providerRef, amount, `capture-${p.id}`);
       await ctx.db
         .update(pledges)
         .set({ status: "charged", chargedCents: amount, settledAt: ctx.now(), updatedAt: ctx.now() })
@@ -106,10 +112,127 @@ async function captureAll(ctx: Ctx, drop: Drop): Promise<SettleOutcome> {
   if (!done) return { dropId: drop.id, result: "skipped" };
 
   const total = await chargedMembers(ctx, drop.id);
-  await logEvent(ctx.db, drop.id, "closed", `Closed at ${money(finalPriceCents, ctx.currency)} — ${total.length} members charged`);
+  const owed = await owingMembers(ctx, drop.id);
+  await logEvent(
+    ctx.db,
+    drop.id,
+    "closed",
+    owed.length
+      ? `Closed at ${money(finalPriceCents, ctx.currency)} — ${owed.length + total.length} members, paying now`
+      : `Closed at ${money(finalPriceCents, ctx.currency)} — ${total.length} members charged`,
+  );
   await recordPayouts(ctx, done);
   for (const m of total) await deliver(ctx, mails.charged(ctx, m.email, done, m.chargedCents ?? finalPriceCents, done.retailCents, done.shipBy));
-  return { dropId: drop.id, result: "succeeded", finalPriceCents, charged: total.length };
+  for (const m of owed) {
+    await deliver(
+      ctx,
+      mails.payNow(ctx, m.email, done, {
+        amountCents: m.chargedCents ?? finalPriceCents,
+        retailCents: done.retailCents,
+        payBy: m.payBy ?? ctx.now(),
+        shipBy: done.shipBy,
+        payUrl: m.payUrl,
+        upi: ctx.upi ? { vpa: ctx.upi.vpa, ref: payRef(m.id) } : null,
+      }),
+    );
+  }
+  return { dropId: drop.id, result: "succeeded", finalPriceCents, charged: total.length + owed.length };
+}
+
+/**
+ * Pay after close: the member now owes the final price. With Razorpay configured
+ * they get a payment link (and the webhook marks them paid); otherwise — or if
+ * the link can't be created — they pay by UPI and the admin marks them paid.
+ * Never throws, so one member's link can't stall a drop's settlement.
+ */
+async function requestPayment(ctx: Ctx, drop: Drop, p: Pledge, amount: number) {
+  const payBy = new Date(ctx.now().getTime() + rules.payWindowHours * 3600_000);
+  let payUrl: string | null = null;
+  let ref = p.providerRef;
+  if (ctx.razorpay) {
+    try {
+      const [u] = await ctx.db.select({ email: users.email }).from(users).where(eq(users.id, p.userId)).limit(1);
+      const link = await ctx.razorpay.createPaymentLink({
+        amountCents: amount,
+        currency: ctx.currency,
+        pledgeId: p.id,
+        description: `${drop.brand} ${drop.item} — final price`,
+        email: u?.email ?? "",
+        expireBy: payBy,
+        callbackUrl: `${ctx.siteUrl}/me`,
+      });
+      payUrl = link.shortUrl;
+      ref = link.id;
+    } catch (err) {
+      console.error(`[settle] payment link failed for pledge ${p.id}; falling back to UPI:`, err);
+    }
+  }
+  await ctx.db
+    .update(pledges)
+    .set({ status: "awaiting_payment", chargedCents: amount, payBy, payUrl, providerRef: ref, updatedAt: ctx.now() })
+    .where(eq(pledges.id, p.id));
+}
+
+/** UPI deep link for a pledge that owes money, when the server has a UPI ID. */
+export function upiFor(ctx: Ctx, p: Pick<Pledge, "id" | "chargedCents">): string | null {
+  if (!ctx.upi || !p.chargedCents) return null;
+  return upiLink({ vpa: ctx.upi.vpa, payee: ctx.upi.payee, amountCents: p.chargedCents, note: payRef(p.id) });
+}
+
+/**
+ * Admin (or the Razorpay webhook): this member has paid. Idempotent — a second
+ * call, or a webhook retry, does nothing.
+ */
+export async function markPaid(ctx: Ctx, pledgeId: string): Promise<boolean> {
+  const [p] = await ctx.db
+    .update(pledges)
+    .set({ status: "charged", settledAt: ctx.now(), updatedAt: ctx.now() })
+    .where(and(eq(pledges.id, pledgeId), eq(pledges.status, "awaiting_payment")))
+    .returning();
+  if (!p) return false;
+  const drop = await getDrop(ctx.db, p.dropId);
+  const [u] = await ctx.db.select({ email: users.email }).from(users).where(eq(users.id, p.userId)).limit(1);
+  if (drop && u) await deliver(ctx, mails.paid(ctx, u.email, drop, p.chargedCents ?? 0, drop.shipBy));
+  return true;
+}
+
+/** The member says they've paid. A prompt for the admin to check the bank, not proof. */
+export async function claimPaid(ctx: Ctx, userId: string, pledgeId: string) {
+  const [p] = await ctx.db
+    .update(pledges)
+    .set({ paidClaimedAt: ctx.now(), updatedAt: ctx.now() })
+    .where(and(eq(pledges.id, pledgeId), eq(pledges.userId, userId), eq(pledges.status, "awaiting_payment"), isNull(pledges.paidClaimedAt)))
+    .returning({ id: pledges.id });
+  if (!p) {
+    const [exists] = await ctx.db
+      .select({ id: pledges.id })
+      .from(pledges)
+      .where(and(eq(pledges.id, pledgeId), eq(pledges.userId, userId)))
+      .limit(1);
+    if (!exists) throw new DropError("not_found", "That pledge doesn't exist.");
+  }
+}
+
+/**
+ * Admin: the payment window is over. Everyone still unpaid loses their spot
+ * (the price stays where the group put it — the ratchet doesn't reverse), and
+ * host payouts are recorded on what was actually paid.
+ */
+export async function closeCollection(ctx: Ctx, dropId: string): Promise<{ released: number }> {
+  const drop = await getDrop(ctx.db, dropId);
+  if (!drop || drop.status !== "succeeded") return { released: 0 };
+  const unpaid = await ctx.db
+    .update(pledges)
+    .set({ status: "failed", releaseReason: "unpaid", settledAt: ctx.now(), updatedAt: ctx.now() })
+    .where(and(eq(pledges.dropId, dropId), eq(pledges.status, "awaiting_payment")))
+    .returning();
+  if (unpaid.length) {
+    await logEvent(ctx.db, dropId, "closed", `Payment window closed — ${unpaid.length} unpaid spot${unpaid.length === 1 ? "" : "s"} released`);
+    const emails = await ctx.db.select({ email: users.email }).from(users).where(inArray(users.id, unpaid.map((p) => p.userId)));
+    for (const e of emails) await deliver(ctx, mails.unpaid(ctx, e.email, drop));
+  }
+  await recordPayouts(ctx, drop);
+  return { released: unpaid.length };
 }
 
 async function releaseAll(ctx: Ctx, drop: Drop, reason: "missed_quorum" | "canceled"): Promise<SettleOutcome> {
@@ -119,7 +242,7 @@ async function releaseAll(ctx: Ctx, drop: Drop, reason: "missed_quorum" | "cance
     .set({ status: "released", releaseReason: reason, settledAt: now, updatedAt: now })
     .where(and(eq(pledges.dropId, drop.id), inArray(pledges.status, ["held", "pending", "capturing"])))
     .returning();
-  for (const p of released) if (p.providerRef) await safeRelease(ctx, p.providerRef, p.id);
+  for (const p of released) if (p.providerRef) await safeRelease(ctx, p);
 
   await ctx.db
     .update(drops)
@@ -133,18 +256,19 @@ async function releaseAll(ctx: Ctx, drop: Drop, reason: "missed_quorum" | "cance
   );
 
   const emails = released.length
-    ? await ctx.db.select({ email: users.email }).from(users).where(inArray(users.id, released.map((p) => p.userId)))
+    ? await ctx.db.select({ id: users.id, email: users.email }).from(users).where(inArray(users.id, released.map((p) => p.userId)))
     : [];
-  for (const e of emails) await deliver(ctx, mails.released(ctx, e.email, drop, reason));
+  const providerOf = new Map(released.map((p) => [p.userId, p.provider]));
+  for (const e of emails) await deliver(ctx, mails.released(ctx, e.email, drop, reason, providerOf.get(e.id)));
   return { dropId: drop.id, result: "failed", released: released.length };
 }
 
-async function safeRelease(ctx: Ctx, ref: string, pledgeId: string) {
+async function safeRelease(ctx: Ctx, p: Pick<Pledge, "id" | "provider" | "providerRef">) {
   try {
-    await ctx.payments.release(ref, `release-${pledgeId}`);
+    await paymentsFor(ctx, p.provider).release(p.providerRef!, `release-${p.id}`);
   } catch (err) {
     // An unreleased authorisation expires on its own within 7 days; log and move on.
-    console.error(`[settle] release failed for pledge ${pledgeId}:`, err);
+    console.error(`[settle] release failed for pledge ${p.id}:`, err);
   }
 }
 
@@ -156,10 +280,20 @@ async function chargedMembers(ctx: Ctx, dropId: string) {
     .where(and(eq(pledges.dropId, dropId), eq(pledges.status, "charged")));
 }
 
+async function owingMembers(ctx: Ctx, dropId: string) {
+  return ctx.db
+    .select({ id: pledges.id, email: users.email, chargedCents: pledges.chargedCents, payUrl: pledges.payUrl, payBy: pledges.payBy })
+    .from(pledges)
+    .innerJoin(users, eq(users.id, pledges.userId))
+    .where(and(eq(pledges.dropId, dropId), eq(pledges.status, "awaiting_payment")));
+}
+
 /**
- * Hosts earn 3% of the volume they brought. A member counts toward whoever's crew
- * link they joined from (if that person is an approved host); members with no
- * crew link count toward the drop's own host.
+ * Hosts earn the drop's host share of the volume they brought — 3% of a partner
+ * drop, 5% to the club fund on a house drop. A member counts toward whoever's
+ * crew link they joined from (if that person is an approved host); members with
+ * no crew link count toward the drop's own host. Only paid volume counts, so a
+ * pay-after-close drop records payouts when its payment window closes.
  */
 export async function recordPayouts(ctx: Ctx, drop: Drop) {
   const rows = await ctx.db
@@ -191,7 +325,7 @@ export async function recordPayouts(ctx: Ctx, drop: Drop) {
         dropId: drop.id,
         members: agg.members,
         volumeCents: agg.volume,
-        amountCents: bps(agg.volume, rules.hostShareBps),
+        amountCents: bps(agg.volume, drop.hostShareBps),
       })
       .onConflictDoNothing();
   }
@@ -219,11 +353,23 @@ export async function cancelDrop(ctx: Ctx, dropId: string): Promise<SettleOutcom
   return releaseAll(ctx, drop, "canceled");
 }
 
-/** Per-drop money summary for the admin view. */
-export function economics(volumeCents: number) {
-  const fee = bps(volumeCents, rules.feeBps);
-  const host = bps(volumeCents, rules.hostShareBps);
-  return { volume: volumeCents, fee, host, net: fee - host, brand: volumeCents - fee };
+/**
+ * Per-drop money summary for the admin view. Partner drops: our fee minus the
+ * host's share. House drops: what's left of the GST-inclusive price after GST,
+ * the gateway, the club fund and the unit cost at the tier the drop reached.
+ */
+export function economics(drop: Pick<Drop, "kind" | "feeBps" | "hostShareBps" | "tiers" | "unlockedTier">, volumeCents: number, units: number) {
+  const host = bps(volumeCents, drop.hostShareBps);
+  if (drop.kind === "house") {
+    const gst = volumeCents - Math.round((volumeCents * 10_000) / (10_000 + rules.gstBps));
+    const gateway = bps(volumeCents, rules.gatewayBps);
+    const tier = drop.tiers[Math.max(0, drop.unlockedTier)];
+    const cost = units * (tier?.costCents ?? 0);
+    const net = volumeCents - gst - gateway - host - cost;
+    return { kind: "house" as const, volume: volumeCents, gst, gateway, host, cost, net, perUnit: units ? Math.round(net / units) : 0 };
+  }
+  const fee = bps(volumeCents, drop.feeBps);
+  return { kind: "partner" as const, volume: volumeCents, fee, host, net: fee - host, brand: volumeCents - fee, perUnit: units ? Math.round((fee - host) / units) : 0 };
 }
 
 
@@ -253,7 +399,7 @@ export async function refundDrop(ctx: Ctx, dropId: string): Promise<{ refunded: 
   let failed = 0;
   for (const p of charged) {
     try {
-      if (p.providerRef) await ctx.payments.refund(p.providerRef, `refund-${p.id}`);
+      if (p.providerRef) await paymentsFor(ctx, p.provider).refund(p.providerRef, `refund-${p.id}`);
       await ctx.db.update(pledges).set({ status: "refunded", updatedAt: ctx.now() }).where(eq(pledges.id, p.id));
       refunded++;
     } catch (err) {

@@ -4,6 +4,8 @@ import { drops, pledges, users, type Pledge, type User } from "./db/schema";
 import { COUNTED, DropError, getDrop, getDropBySlug, isJoinable, logEvent, memberCount } from "./drops";
 import { deliver, mails } from "./email";
 import { money } from "./money";
+import { demoPayments } from "./payments/demo";
+import { paymentsFor } from "./payments/for";
 import { currentPriceCents, tierIndexFor } from "./tiers";
 import { rules } from "./rules";
 
@@ -15,12 +17,13 @@ export type JoinResult = {
   alreadyIn: boolean;
 };
 
-const ACTIVE = ["pending", "held", "capturing", "charged"] as const;
+const ACTIVE = ["pending", "held", "capturing", "awaiting_payment", "charged"] as const;
 
 /**
  * Join a drop: create a pending pledge at the current price and place a hold.
- * Demo holds succeed immediately; Stripe holds need the member to confirm the
- * card in the browser, after which `confirmPledge` or the webhook marks it held.
+ * Demo and pay-after-close holds succeed immediately; Stripe holds need the
+ * member to confirm the card in the browser, after which `confirmPledge` or the
+ * webhook marks it held. Practice drops always use simulated payments.
  */
 export async function joinDrop(
   ctx: Ctx,
@@ -36,6 +39,12 @@ export async function joinDrop(
 
   const existing = await activePledge(ctx, drop.id, user.id);
   if (existing) return resume(ctx, existing);
+
+  const size = opts.size?.trim().slice(0, 16) || null;
+  if (drop.sizes.length > 0 && (!size || !drop.sizes.includes(size))) {
+    throw new DropError("invalid", `Pick your size: ${drop.sizes.join(", ")}.`);
+  }
+  const payments = drop.practice ? demoPayments : ctx.payments;
 
   let referrerId: string | null = null;
   const code = opts.referrerCode?.trim().toLowerCase();
@@ -54,8 +63,8 @@ export async function joinDrop(
         userId: user.id,
         heldCents: holdCents,
         referrerId,
-        provider: ctx.payments.mode,
-        size: opts.size?.slice(0, 16) ?? null,
+        provider: payments.mode,
+        size: drop.sizes.length > 0 ? size : null,
       })
       .returning();
     pledge = row!;
@@ -68,7 +77,7 @@ export async function joinDrop(
 
   let hold;
   try {
-    hold = await ctx.payments.createHold({
+    hold = await payments.createHold({
       amountCents: holdCents,
       currency: ctx.currency,
       email: user.email,
@@ -107,7 +116,7 @@ async function resume(ctx: Ctx, p: Pledge): Promise<JoinResult & { after: (() =>
   if (p.status !== "pending" || !p.providerRef) {
     return { pledgeId: p.id, status: "held", clientSecret: null, holdCents: p.heldCents, alreadyIn: true, after: [] };
   }
-  const r = await ctx.payments.resumeHold(p.providerRef);
+  const r = await paymentsFor(ctx, p.provider).resumeHold(p.providerRef);
   const after = r.status === "held" ? await markHeld(ctx, p.id) : [];
   return {
     pledgeId: p.id,
@@ -142,7 +151,10 @@ export async function markHeld(ctx: Ctx, pledgeId: string): Promise<(() => Promi
   const tasks: (() => Promise<void>)[] = [];
   if (owner) {
     tasks.push(async () => {
-      await deliver(ctx, mails.joined(ctx, owner.email, drop, p.heldCents, `${ctx.siteUrl}/drops/${drop.slug}?c=${owner.crewCode}`, drop.closesAt));
+      await deliver(
+        ctx,
+        mails.joined(ctx, owner.email, drop, p.heldCents, `${ctx.siteUrl}/drops/${drop.slug}?c=${owner.crewCode}`, drop.closesAt, p.provider),
+      );
     });
   }
   for (const idx of unlocked) tasks.push(() => notifyTierUnlocked(ctx, drop.id, idx));
@@ -208,7 +220,7 @@ export async function confirmPledge(ctx: Ctx, user: User, pledgeId: string) {
   const p = await ownPledge(ctx, user, pledgeId);
   if (p.status !== "pending") return { status: p.status, after: [] as (() => Promise<void>)[] };
   if (!p.providerRef) throw new DropError("payment_failed", "This hold was never started.");
-  const status = await ctx.payments.getStatus(p.providerRef);
+  const status = await paymentsFor(ctx, p.provider).getStatus(p.providerRef);
   if (status === "held") return { status: "held" as const, after: await markHeld(ctx, p.id) };
   if (status === "canceled" || status === "failed") {
     await ctx.db.update(pledges).set({ status: "failed", releaseReason: "card_declined", updatedAt: ctx.now() }).where(eq(pledges.id, p.id));
@@ -244,8 +256,8 @@ export async function leavePledge(ctx: Ctx, user: User, pledgeId: string) {
     .where(and(eq(pledges.id, p.id), inArray(pledges.status, ["pending", "held"])))
     .returning();
   if (!claimed) return { after: [] as (() => Promise<void>)[] };
-  if (p.providerRef) await ctx.payments.release(p.providerRef, `release-${p.id}`);
-  return { after: [async () => void (await deliver(ctx, mails.released(ctx, user.email, drop, "left")))] };
+  if (p.providerRef) await paymentsFor(ctx, p.provider).release(p.providerRef, `release-${p.id}`);
+  return { after: [async () => void (await deliver(ctx, mails.released(ctx, user.email, drop, "left", p.provider)))] };
 }
 
 async function ownPledge(ctx: Ctx, user: User, pledgeId: string): Promise<Pledge> {
@@ -260,7 +272,7 @@ export async function pledgesForUser(ctx: Ctx, userId: string) {
     .select({ pledge: pledges, drop: drops })
     .from(pledges)
     .innerJoin(drops, eq(drops.id, pledges.dropId))
-    .where(and(eq(pledges.userId, userId), inArray(pledges.status, ["pending", "held", "capturing", "charged", "released", "failed"])))
+    .where(and(eq(pledges.userId, userId), inArray(pledges.status, ["pending", "held", "capturing", "awaiting_payment", "charged", "released", "failed", "refunded"])))
     .orderBy(desc(pledges.createdAt));
 }
 

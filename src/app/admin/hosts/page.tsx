@@ -1,3 +1,4 @@
+import { count } from "@/lib/money";
 import { desc, eq } from "drizzle-orm";
 import { hostApplications, users } from "@/lib/db/schema";
 import { fmtDateTime } from "@/lib/format";
@@ -16,7 +17,7 @@ export default async function AdminHosts() {
           <li key={a.id} className="py-5 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-start">
             <div>
               <p className="label text-ink-3">{email} · {fmtDateTime(a.createdAt)} · <span className={a.status === "approved" ? "text-go" : a.status === "rejected" ? "text-stamp" : "text-warn"}>{a.status}</span></p>
-              <p className="display text-2xl mt-1">{a.groupName} <span className="font-mono text-base text-ink-3">· {a.groupSize.toLocaleString("en-US")} people</span></p>
+              <p className="display text-2xl mt-1">{a.groupName} <span className="font-mono text-base text-ink-3">· {count(a.groupSize)} people</span></p>
               <p className="text-ink-2 mt-1 max-w-[70ch]">{a.brief}</p>
             </div>
             {a.status === "pending" ? (

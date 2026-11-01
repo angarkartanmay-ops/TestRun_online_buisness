@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useId, useState } from "react";
 import type { Tier } from "@/lib/db/schema";
-import { money } from "@/lib/money";
+import { count, money } from "@/lib/money";
 import { ladderState } from "@/lib/tiers";
 import { Ladder } from "./ladder";
 
@@ -29,7 +29,7 @@ export function HeroDial({ tiers, retailCents, members, brand, item, slug }: { t
         <div>
           <p className="label text-ink-3">If this many of us join</p>
           <p className="display text-6xl num leading-[0.8] mt-2" aria-live="polite">
-            {n.toLocaleString("en-US")}
+            {count(n)}
           </p>
         </div>
         <div className="text-right">
@@ -64,7 +64,7 @@ export function HeroDial({ tiers, retailCents, members, brand, item, slug }: { t
             : `Floor price. That's the mill, the duty and everyone's cut — ${money(retailCents - price)} under retail.`}
       </p>
       <Link href={`/drops/${slug}`} className="btn btn-sm justify-self-start">
-        It&apos;s live: {members.toLocaleString("en-US")} in now
+        It&apos;s live: {count(members)} in now
       </Link>
     </div>
   );

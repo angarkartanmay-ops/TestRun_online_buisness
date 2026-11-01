@@ -16,7 +16,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
         <p className="label text-ink-2">Member card</p>
         <h1 className="display text-6xl sm:text-8xl mt-2">One code. No password.</h1>
         <p className="mt-5 text-lg text-ink-2 max-w-[46ch]">
-          Membership is free and always will be. Your card gets you the board, your holds, your crew link — and one email when a drop you&apos;re in drops its price.
+          Membership is free and always will be. Your card gets you the board, your drops, your crew link — and one email when a drop you&apos;re in drops its price.
         </p>
       </div>
       <div className="lg:col-span-5 lg:col-start-8 bg-receipt border-2 border-ink p-6 sm:p-8 shadow-[8px_8px_0_var(--shadow)] self-start">

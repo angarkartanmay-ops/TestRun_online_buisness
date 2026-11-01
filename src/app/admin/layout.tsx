@@ -19,7 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <NavLink href="/admin/emails">Email log</NavLink>
         </nav>
         <p className="label text-ink-3 ml-auto">
-          payments: <b className={modes.payments === "stripe" ? "text-go" : "text-warn"}>{modes.payments}</b> · email:{" "}
+          payments: <b className={modes.payments === "stripe" ? "text-go" : "text-warn"}>{modes.payments === "commit" ? "pay after close" : modes.payments === "demo" ? "practice only" : "card holds"}</b> · email:{" "}
           <b className={modes.email === "resend" ? "text-go" : "text-warn"}>{modes.email}</b> · db: <b>{modes.database}</b>
         </p>
       </div>

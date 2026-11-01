@@ -1,11 +1,17 @@
 import { z } from "zod";
-import type { ReceiptLine, Tier } from "./db/schema";
+import { DROP_KINDS, type DropKind, type ReceiptLine, type Tier } from "./db/schema";
 import { rules } from "./rules";
 import { validateTiers } from "./tiers";
 
 export const CATEGORIES = ["apparel", "audio", "tech", "objects", "bags"] as const;
 
+/** Major units (rupees) from a form field to minor units (paise). */
 const dollars = (v: unknown) => Math.round(Number(v) * 100);
+
+/** "S, M, L" → ["S", "M", "L"]: trimmed, de-duplicated, at most 10 sizes of 8 characters. */
+export function parseSizes(text: string): string[] {
+  return [...new Set(text.split(/[,\n]/).map((s) => s.trim().toUpperCase().slice(0, 8)).filter(Boolean))].slice(0, 10);
+}
 
 /** Receipt lines from a textarea: "Label | 9.10 | optional note". A label starting "QUORUM" is our fee line. */
 export function parseReceipt(text: string): { lines: ReceiptLine[]; errors: string[] } {
@@ -45,12 +51,17 @@ const schema = z.object({
   retail: z.coerce.number().positive("Retail price must be above zero."),
   origin: z.string().trim().min(3, "Name the factory city and country — Bylaw 3.").max(200),
   opensAt: z.string().min(1, "Required."),
-  windowHours: z.coerce.number().int().min(12, "At least 12 hours.").max(rules.maxWindowHours, `At most ${rules.maxWindowHours} hours — card holds expire after 7 days.`),
+  windowHours: z.coerce.number().int().min(12, "At least 12 hours.").max(rules.maxWindowHours, `At most ${rules.maxWindowHours} hours — short windows keep it a group decision.`),
   shipDays: z.coerce.number().int().min(7, "At least a week after close.").max(180),
   resaleIndex: z.union([z.literal(""), z.coerce.number().min(0).max(2)]).default(""),
   tiers: z.string(),
   receipt: z.string().default(""),
   status: z.enum(["draft", "live"]),
+  kind: z.enum(DROP_KINDS).default("house"),
+  hostShare: z.coerce.number().min(0, "Can't be negative.").max(20, "Keep the host share at 20% or less.").default(rules.houseHostShareBps / 100),
+  sizes: z.string().max(200).default(""),
+  countryOfOrigin: z.string().trim().min(2, "Required — e.g. India.").max(60).default("India"),
+  practice: z.string().optional(),
 });
 
 export type DropInput = {
@@ -58,6 +69,7 @@ export type DropInput = {
     brand: string; item: string; slug: string; blurb: string; spec: string; category: string; glyph: string; plate: string;
     imageUrl: string | null; retailCents: number; origin: string; opensAt: Date; closesAt: Date; shipBy: Date;
     resaleIndex: number | null; tiers: Tier[]; receipt: ReceiptLine[]; status: "draft" | "live";
+    kind: DropKind; hostShareBps: number; feeBps: number; sizes: string[]; countryOfOrigin: string; practice: boolean;
   };
 };
 
@@ -71,12 +83,18 @@ export function parseDropForm(form: FormData): { ok: true; input: DropInput } | 
   // problem is reported in one pass instead of one round-trip at a time.
   let tiers: Tier[] = [];
   try {
-    tiers = (JSON.parse(raw.tiers ?? "[]") as { min: number; price: number }[]).map((t) => ({ min: Math.round(Number(t.min)), priceCents: dollars(t.price) }));
+    tiers = (JSON.parse(raw.tiers ?? "[]") as { min: number; price: number; cost?: string | number }[]).map((t) => ({
+      min: Math.round(Number(t.min)),
+      priceCents: dollars(t.price),
+      ...(t.cost !== undefined && String(t.cost).trim() !== "" ? { costCents: dollars(t.cost) } : {}),
+    }));
   } catch {
     errors.tiers = "Couldn't read the ladder.";
   }
   const retailCents = dollars(raw.retail);
-  const tierErrors = validateTiers(tiers, Number.isFinite(retailCents) ? retailCents : 0, rules.maxFirstTierMembers);
+  const kind: DropKind = raw.kind === "partner" ? "partner" : "house";
+  const hostShareBps = Math.round((Number(raw.hostShare ?? rules.houseHostShareBps / 100) || 0) * 100);
+  const tierErrors = validateTiers(tiers, Number.isFinite(retailCents) ? retailCents : 0, rules.maxFirstTierMembers, { kind, hostShareBps });
   if (tierErrors.length) errors.tiers ??= tierErrors.join(" ");
   const receipt = parseReceipt(raw.receipt ?? "");
   if (receipt.errors.length) errors.receipt ??= receipt.errors.join(" ");
@@ -95,6 +113,8 @@ export function parseDropForm(form: FormData): { ok: true; input: DropInput } | 
         shipBy: new Date(closesAt.getTime() + v.shipDays * 86400_000),
         resaleIndex: v.resaleIndex === "" ? null : Number(v.resaleIndex),
         tiers, receipt: receipt.lines, status: v.status,
+        kind: v.kind, hostShareBps: Math.round(v.hostShare * 100), feeBps: v.kind === "partner" ? rules.feeBps : 0,
+        sizes: parseSizes(v.sizes), countryOfOrigin: v.countryOfOrigin, practice: v.practice === "on",
       },
     },
   };

@@ -31,7 +31,7 @@ export default async function HostDashboard() {
   ]);
   const pending = paid.filter((r) => r.p.status === "pending").reduce((s, r) => s + r.p.amountCents, 0);
   const lifetime = paid.filter((r) => r.p.status !== "void").reduce((s, r) => s + r.p.amountCents, 0);
-  const projected = open.reduce((s, r) => s + bps(r.held ?? 0, rules.hostShareBps), 0);
+  const projected = open.reduce((s, r) => s + bps(r.held ?? 0, rules.houseHostShareBps), 0);
 
   return (
     <div className="mx-auto max-w-[1320px] px-4 sm:px-8 pt-10 sm:pt-14 grid gap-14">
@@ -110,7 +110,7 @@ export default async function HostDashboard() {
         </div>
         <aside className="lg:col-span-5 bg-receipt border-2 border-ink p-5 grid gap-4 self-start">
           <p className="display text-3xl">Your host link</p>
-          <p className="text-sm text-ink-2">Every member who joins any drop from this link earns you {rules.hostShareBps / 100}% of what they pay — out of our fee, never added to theirs. Members see that on their receipt.</p>
+          <p className="text-sm text-ink-2">Every member who joins a drop from this link counts toward your club fund&apos;s share — {rules.houseHostShareBps / 100}% on house drops — out of our margin, never added to their price. Members see it on their receipt.</p>
           <CrewShare url={`${config.siteUrl}/?c=${user.crewCode}`} message="We're buying together on QUORUM — the price drops the more of us join:" />
         </aside>
       </section>

@@ -8,7 +8,8 @@ import { brandApplications, drops, hostApplications, payouts, users } from "@/li
 import { parseDropForm } from "@/lib/drop-input";
 import { getDrop } from "@/lib/drops";
 import { getCtx } from "@/lib/server-ctx";
-import { cancelDrop, markShipped, refundDrop, settleDrop, settleDue } from "@/lib/settle";
+import { refreshPracticeDrops } from "@/lib/seed";
+import { cancelDrop, closeCollection, markPaid, markShipped, refundDrop, settleDrop, settleDue } from "@/lib/settle";
 
 export type DropFormState = { ok: boolean; message: string; errors?: Record<string, string> } | null;
 
@@ -26,10 +27,11 @@ export async function saveDrop(_prev: DropFormState, form: FormData): Promise<Dr
     if (existing.status !== "draft") {
       // Once members have joined, the terms they joined on are frozen.
       // The ship-by date is a promise to members too, so it is frozen with the price.
-      const { tiers: _t, retailCents: _r, opensAt: _o, closesAt: _c, shipBy: _b, status: _s, slug: _sl, ...cosmetic } = v;
+      // So are the sizes people picked from, the club fund's share, and whether it's practice.
+      const { tiers: _t, retailCents: _r, opensAt: _o, closesAt: _c, shipBy: _b, status: _s, slug: _sl, kind: _k, hostShareBps: _h, feeBps: _f, sizes: _z, practice: _p, ...cosmetic } = v;
       await ctx.db.update(drops).set({ ...cosmetic, updatedAt: ctx.now() }).where(eq(drops.id, id));
       revalidatePath(`/admin/drops/${id}`);
-      return { ok: true, message: "Saved. Price, ladder, dates and ship-by are locked once a drop is live." };
+      return { ok: true, message: "Saved. Price, ladder, sizes, club fund, dates and ship-by are locked once a drop is live." };
     }
     await ctx.db.update(drops).set({ ...v, updatedAt: ctx.now() }).where(eq(drops.id, id));
     revalidatePath(`/admin/drops/${id}`);
@@ -51,8 +53,26 @@ export async function dropAction(form: FormData) {
   else if (op === "cancel") await cancelDrop(ctx, id);
   else if (op === "shipped") await markShipped(ctx, id);
   else if (op === "refund") await refundDrop(ctx, id);
+  else if (op === "close_collection") await closeCollection(ctx, id);
   revalidatePath(`/admin/drops/${id}`);
   revalidatePath("/admin");
+}
+
+/** Per-member actions on a drop: confirm a UPI payment. */
+export async function pledgeAction(form: FormData) {
+  await requireAdmin();
+  const ctx = await getCtx();
+  if (String(form.get("op")) === "paid") await markPaid(ctx, String(form.get("id")));
+  revalidatePath(`/admin/drops/${String(form.get("dropId"))}`);
+}
+
+/** Open a fresh batch of practice drops now instead of waiting for the daily sweep. */
+export async function refreshPractice() {
+  await requireAdmin();
+  const ctx = await getCtx();
+  await refreshPracticeDrops(ctx.db, ctx.now());
+  revalidatePath("/admin");
+  revalidatePath("/");
 }
 
 export async function settleAllDue() {

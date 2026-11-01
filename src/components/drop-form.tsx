@@ -4,8 +4,9 @@ import { Minus, Plus } from "@phosphor-icons/react";
 import { useMemo, useState } from "react";
 import { saveDrop, type DropFormState } from "@/app/admin/actions";
 import { CATEGORIES } from "@/lib/drop-input";
+import { CURRENCY } from "@/lib/money";
 import { rules } from "@/lib/rules";
-import { validateTiers } from "@/lib/tiers";
+import { tierMargins, validateTiers } from "@/lib/tiers";
 import { Field } from "./form-field";
 import { Ladder } from "./ladder";
 import { useFormAction } from "./use-form-action";
@@ -14,8 +15,11 @@ export type DropFormValues = {
   id?: string;
   brand: string; item: string; slug: string; blurb: string; spec: string; category: string; glyph: string; plate: string;
   imageUrl: string; retail: string; origin: string; opensAt: string; windowHours: string; shipDays: string; resaleIndex: string;
-  tiers: { min: string; price: string }[]; receipt: string; status: "draft" | "live"; locked: boolean;
+  tiers: { min: string; price: string; cost: string }[]; receipt: string; status: "draft" | "live"; locked: boolean;
+  kind: "house" | "partner"; hostShare: string; sizes: string; countryOfOrigin: string; practice: boolean;
 };
+
+const SYMBOL = CURRENCY === "inr" ? "₹" : CURRENCY === "gbp" ? "£" : CURRENCY === "eur" ? "€" : "$";
 
 const GLYPHS = ["tshirt", "hoodie", "pants", "coat", "yarn", "sneaker", "headphones", "keyboard", "eyeglasses", "watch", "tote", "backpack", "coffee", "package"];
 const PLATES = ["sage", "cobalt", "smoke", "mint", "butter", "clay", "stone", "rust"];
@@ -32,9 +36,20 @@ export function DropForm({ initial }: { initial: DropFormValues }) {
     setV(next);
   };
 
-  const tiers = useMemo(() => v.tiers.map((t) => ({ min: Math.round(Number(t.min) || 0), priceCents: Math.round((Number(t.price) || 0) * 100) })), [v.tiers]);
+  const house = v.kind === "house";
+  const hostShareBps = Math.round((Number(v.hostShare) || 0) * 100);
+  const tiers = useMemo(
+    () =>
+      v.tiers.map((t) => ({
+        min: Math.round(Number(t.min) || 0),
+        priceCents: Math.round((Number(t.price) || 0) * 100),
+        ...(t.cost.trim() !== "" ? { costCents: Math.round((Number(t.cost) || 0) * 100) } : {}),
+      })),
+    [v.tiers],
+  );
   const retailCents = Math.round((Number(v.retail) || 0) * 100);
-  const tierProblems = validateTiers(tiers, retailCents, rules.maxFirstTierMembers);
+  const tierProblems = validateTiers(tiers, retailCents, rules.maxFirstTierMembers, { kind: v.kind, hostShareBps });
+  const margins = house ? tierMargins(tiers, hostShareBps) : [];
   const L = v.locked;
 
   return (
@@ -59,10 +74,18 @@ export function DropForm({ initial }: { initial: DropFormValues }) {
         </Field>
         <div className="grid sm:grid-cols-2 gap-5">
           <Field id="spec" label="Spec line" error={e.spec}>
-            <input id="spec" name="spec" className="field" value={v.spec} onChange={set("spec")} placeholder="12.4oz loopback · boxy fit" />
+            <input id="spec" name="spec" className="field" value={v.spec} onChange={set("spec")} placeholder="240 GSM combed cotton · oversized" />
           </Field>
-          <Field id="origin" label="Made (factory city, country code)" error={e.origin}>
-            <input id="origin" name="origin" className="field" value={v.origin} onChange={set("origin")} placeholder="Knit + dyed in Barcelos, PT" />
+          <Field id="origin" label="Made (factory, city, state)" error={e.origin}>
+            <input id="origin" name="origin" className="field" value={v.origin} onChange={set("origin")} placeholder="Knit + printed in Tiruppur, Tamil Nadu" />
+          </Field>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-5">
+          <Field id="countryOfOrigin" label="Country of origin" error={e.countryOfOrigin} hint="Shown on the drop — required by India's e-commerce rules.">
+            <input id="countryOfOrigin" name="countryOfOrigin" className="field" value={v.countryOfOrigin} onChange={set("countryOfOrigin")} />
+          </Field>
+          <Field id="sizes" label="Sizes members pick from" error={e.sizes} hint="Comma-separated, e.g. S, M, L, XL. Leave empty for one size.">
+            <input id="sizes" name="sizes" className="field" value={v.sizes} readOnly={L} onChange={set("sizes")} placeholder="XS, S, M, L, XL, XXL" />
           </Field>
         </div>
         <div className="grid sm:grid-cols-3 gap-5">
@@ -85,7 +108,7 @@ export function DropForm({ initial }: { initial: DropFormValues }) {
         <Field id="imageUrl" label="Product photo URL (optional)" error={e.imageUrl} hint="https:// only. Without one, the drop shows its specimen plate.">
           <input id="imageUrl" name="imageUrl" className="field" value={v.imageUrl} onChange={set("imageUrl")} />
         </Field>
-        <Field id="receipt" label="Cost sheet — one line each: Label | 9.10 | note" error={e.receipt} hint='Lines should sum to the floor price. Start our fee line with "QUORUM".'>
+        <Field id="receipt" label="Cost sheet — one line each: Label | 186.00 | note" error={e.receipt} hint='Lines should sum to the price it closes at. Start our own line with "QUORUM".'>
           <textarea id="receipt" name="receipt" className="field min-h-[12rem] font-mono text-sm" value={v.receipt} onChange={set("receipt")} />
         </Field>
       </div>
@@ -93,21 +116,43 @@ export function DropForm({ initial }: { initial: DropFormValues }) {
       <div className="lg:col-span-5 grid gap-6 content-start">
         <fieldset disabled={L} className="grid gap-6 bg-receipt border-2 border-ink p-5 disabled:opacity-80">
           <legend className="label px-1">The ladder{L ? " — locked while live" : ""}</legend>
-          <Field id="retail" label="Retail price ($)" error={e.retail}>
+          <div className="grid grid-cols-2 gap-4">
+            <Field id="kind" label="Who makes it">
+              <select id="kind" name="kind" className="field" value={v.kind} onChange={set("kind")}>
+                <option value="house">We do (house)</option>
+                <option value="partner">A brand (partner)</option>
+              </select>
+            </Field>
+            <Field id="hostShare" label="Host / club fund (%)" error={e.hostShare}>
+              <input id="hostShare" name="hostShare" type="number" step="0.5" inputMode="decimal" className="field" value={v.hostShare} onChange={set("hostShare")} />
+            </Field>
+          </div>
+          <Field id="retail" label={`Retail price (${SYMBOL})`} error={e.retail} hint="What one person pays for a single custom piece, alone.">
             <input id="retail" name="retail" type="number" step="0.01" inputMode="decimal" className="field" value={v.retail} onChange={set("retail")} />
           </Field>
           <div className="grid gap-2">
-            <p className="label text-ink-2">Tiers — members → price ($)</p>
+            <p className="label text-ink-2">
+              Tiers — members → price ({SYMBOL}){house ? ` → unit cost (${SYMBOL}, making + delivery at that quantity)` : ""}
+            </p>
             {v.tiers.map((t, i) => (
-              <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+              <div key={i} className={`grid ${house ? "grid-cols-[1fr_1fr_1fr_auto]" : "grid-cols-[1fr_1fr_auto]"} gap-2`}>
                 <input aria-label={`Tier ${i + 1} members`} type="number" inputMode="numeric" className="field" value={t.min} onChange={(ev) => setV({ ...v, tiers: v.tiers.map((x, j) => (j === i ? { ...x, min: ev.target.value } : x)) })} />
                 <input aria-label={`Tier ${i + 1} price`} type="number" step="0.01" inputMode="decimal" className="field" value={t.price} onChange={(ev) => setV({ ...v, tiers: v.tiers.map((x, j) => (j === i ? { ...x, price: ev.target.value } : x)) })} />
+                {house ? (
+                  <input aria-label={`Tier ${i + 1} unit cost`} type="number" step="0.01" inputMode="decimal" className="field" value={t.cost} onChange={(ev) => setV({ ...v, tiers: v.tiers.map((x, j) => (j === i ? { ...x, cost: ev.target.value } : x)) })} />
+                ) : null}
                 <button type="button" aria-label={`Remove tier ${i + 1}`} className="btn btn-sm btn-ghost px-3" disabled={v.tiers.length <= 2} onClick={() => setV({ ...v, tiers: v.tiers.filter((_, j) => j !== i) })}>
                   <Minus size={16} />
                 </button>
               </div>
             ))}
-            <button type="button" className="btn btn-sm btn-ghost justify-self-start" disabled={v.tiers.length >= 6} onClick={() => setV({ ...v, tiers: [...v.tiers, { min: "", price: "" }] })}>
+            {house && margins.some((m) => tiers[m.index]?.costCents) ? (
+              <p className="font-mono text-xs text-ink-2">
+                Margin after GST, gateway, club fund and cost:{" "}
+                {margins.map((m) => `T${m.index + 1} ${(m.marginBps / 100).toFixed(1)}%`).join(" · ")} — keep each ≥ {rules.minMarginBps / 100}%.
+              </p>
+            ) : null}
+            <button type="button" className="btn btn-sm btn-ghost justify-self-start" disabled={v.tiers.length >= 6} onClick={() => setV({ ...v, tiers: [...v.tiers, { min: "", price: "", cost: "" }] })}>
               <Plus size={16} /> Add tier
             </button>
             {tierProblems.length ? (
@@ -135,11 +180,20 @@ export function DropForm({ initial }: { initial: DropFormValues }) {
             <input type="hidden" name="opensAt" value={v.opensAt} />
             <input type="hidden" name="windowHours" value={v.windowHours} />
             <input type="hidden" name="shipDays" value={v.shipDays} />
+            <input type="hidden" name="kind" value={v.kind} />
+            <input type="hidden" name="hostShare" value={v.hostShare} />
           </>
         ) : null}
         <Field id="resaleIndex" label="Resale index (optional)" error={e.resaleIndex} hint="Secondhand median ÷ retail, last 90 days.">
           <input id="resaleIndex" name="resaleIndex" type="number" step="0.01" className="field" value={v.resaleIndex} onChange={set("resaleIndex")} />
         </Field>
+        <label className="flex items-start gap-3 text-sm">
+          <input type="checkbox" name="practice" className="mt-1 w-4 h-4" checked={v.practice} disabled={L} onChange={(ev) => setV({ ...v, practice: ev.target.checked })} />
+          <span>
+            <b>Practice drop</b> — labelled as practice on the site, and nobody pays, whatever the server&apos;s payment setup. Use it to show friends how a drop works.
+          </span>
+        </label>
+        {L && v.practice ? <input type="hidden" name="practice" value="on" /> : null}
         <Field id="status" label="Status">
           <select id="status" name="status" className="field" value={v.status} onChange={set("status")} disabled={L}>
             <option value="draft">Draft — only admins can see it</option>

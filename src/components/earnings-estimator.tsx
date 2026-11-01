@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { money } from "@/lib/money";
+import { count, CURRENCY, money } from "@/lib/money";
+
+const SYMBOL = CURRENCY === "inr" ? "₹" : CURRENCY === "gbp" ? "£" : "$";
 
 /** Starts on realistic numbers, plainly labelled as an example. */
 export function EarningsEstimator({ shareBps }: { shareBps: number }) {
-  const [reach, setReach] = useState(310);
-  const [rate, setRate] = useState(31);
-  const [price, setPrice] = useState(58);
+  const [reach, setReach] = useState(120);
+  const [rate, setRate] = useState(40);
+  const [price, setPrice] = useState(899);
   const members = Math.round((reach * rate) / 100);
   const volume = members * price * 100;
   const pay = Math.round((volume * shareBps) / 10_000);
@@ -38,17 +40,17 @@ export function EarningsEstimator({ shareBps }: { shareBps: number }) {
     <div className="bg-receipt border-2 border-ink p-5 sm:p-7 shadow-[8px_8px_0_var(--shadow)] grid gap-6">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <p className="display text-3xl">What one drop pays</p>
-        <span className="stamp stamp-hot shrink-0">Example: a climbing gym chat</span>
+        <span className="stamp stamp-hot shrink-0">Example: one batch&apos;s hoodie</span>
       </div>
       <div className="grid sm:grid-cols-3 gap-4">
         {input("est-reach", "People in your group", reach, setReach, { min: 2, max: 5_000_000 })}
         {input("est-rate", "Share who join", rate, setRate, { min: 0, max: 100, suffix: "%" })}
-        {input("est-price", "Member price", price, setPrice, { min: 1, max: 5000, suffix: "$" })}
+        {input("est-price", "Member price", price, setPrice, { min: 1, max: 50_000, suffix: SYMBOL })}
       </div>
       <dl className="grid grid-cols-3 border-t-2 border-ink pt-5 gap-4">
         <div>
           <dt className="label text-ink-3">Members</dt>
-          <dd className="display text-4xl num mt-1">{members.toLocaleString("en-US")}</dd>
+          <dd className="display text-4xl num mt-1">{count(members)}</dd>
         </div>
         <div>
           <dt className="label text-ink-3">Drop volume</dt>

@@ -1,5 +1,5 @@
 import type { Tier } from "@/lib/db/schema";
-import { money } from "@/lib/money";
+import { CURRENCY, money } from "@/lib/money";
 import { ladderFill } from "@/lib/tiers";
 
 /** Equal columns, one per tier; green = unlocked, red = the next one, grey = later. */
@@ -7,7 +7,7 @@ export function Ladder({
   tiers,
   members,
   unlockedTier,
-  currency = "usd",
+  currency = CURRENCY,
   compact = false,
 }: {
   tiers: Tier[];

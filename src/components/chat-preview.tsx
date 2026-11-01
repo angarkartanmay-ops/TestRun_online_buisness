@@ -8,15 +8,15 @@ type Msg = { who: string; text?: string; card?: boolean; me?: boolean };
  */
 export function ChatPreview({ slug, item, priceCents, nextNeeded, nextPriceCents, siteHost }: { slug: string; item: string; priceCents: number; nextNeeded: number | null; nextPriceCents: number | null; siteHost: string }) {
   const msgs: Msg[] = [
-    { who: "inès", text: `ok who's in on the ${item.toLowerCase()}` },
-    { who: "inès", card: true },
-    { who: "kofi", text: nextNeeded && nextPriceCents ? `wait ${nextNeeded} more and it's ${money(nextPriceCents)} for all of us??` : `${money(priceCents)} is actually insane` },
-    { who: "ruby t.", text: "joined. posting it in the climbing chat" },
+    { who: "ananya", text: `ok who's in on the ${item.toLowerCase()}` },
+    { who: "ananya", card: true },
+    { who: "kabir", text: nextNeeded && nextPriceCents ? `wait ${nextNeeded} more and it's ${money(nextPriceCents)} for all of us??` : `${money(priceCents)} is actually insane` },
+    { who: "meher", text: "joined, M. posting it in the hostel group" },
     { who: "you", text: "in. that's one more", me: true },
   ];
   return (
     <div className="bg-paper-2 border border-line p-4 sm:p-5 grid gap-2.5 max-w-[26rem] w-full">
-      <p className="label text-ink-3 text-center pb-1">the good chat · 6 people</p>
+      <p className="label text-ink-3 text-center pb-1">batch of '27 · 6 people</p>
       {msgs.map((m, i) => (
         <div key={i} className={`flex flex-col ${m.me ? "items-end" : "items-start"}`}>
           {!m.me && (i === 0 || msgs[i - 1]!.who !== m.who) ? <span className="text-[0.6875rem] text-ink-3 px-3 mb-0.5">{m.who}</span> : null}

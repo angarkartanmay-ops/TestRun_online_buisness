@@ -10,9 +10,11 @@ export default function NewDropPage() {
       <DropForm
         initial={{
           brand: "", item: "", slug: "", blurb: "", spec: "", category: "apparel", glyph: "tshirt", plate: "sage", imageUrl: "",
-          retail: "", origin: "", opensAt: opens.toISOString().slice(0, 16), windowHours: String(rules.defaultWindowHours), shipDays: "42", resaleIndex: "",
-          tiers: [{ min: "10", price: "" }, { min: "60", price: "" }, { min: "180", price: "" }, { min: "400", price: "" }],
+          retail: "", origin: "", opensAt: opens.toISOString().slice(0, 16), windowHours: String(rules.defaultWindowHours), shipDays: "21", resaleIndex: "",
+          // Tiers where the factory price drops: small batch, then bulk.
+          tiers: [{ min: "15", price: "", cost: "" }, { min: "50", price: "", cost: "" }, { min: "100", price: "", cost: "" }],
           receipt: "", status: "draft", locked: false,
+          kind: "house", hostShare: String(rules.houseHostShareBps / 100), sizes: "XS, S, M, L, XL, XXL", countryOfOrigin: "India", practice: false,
         }}
       />
     </div>

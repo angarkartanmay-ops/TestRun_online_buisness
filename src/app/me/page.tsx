@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CrewShare } from "@/components/crew-share";
+import { PayBox } from "@/components/pay-box";
 import { SpecimenPlate } from "@/components/plate";
 import { SignOutButton } from "@/components/sign-out-button";
-import { config } from "@/lib/config";
+import { config, payStyle } from "@/lib/config";
 import { fmtDate } from "@/lib/format";
 import { money } from "@/lib/money";
 import { crewSize, pledgesForUser } from "@/lib/pledges";
@@ -14,23 +15,27 @@ import { currentPriceCents } from "@/lib/tiers";
 
 export const metadata: Metadata = { title: "My drops" };
 
+const card = payStyle === "card";
+
 const STATUS: Record<string, { label: string; tone: string }> = {
   pending: { label: "Card not confirmed", tone: "text-warn" },
-  held: { label: "Held", tone: "text-ink" },
-  capturing: { label: "Charging", tone: "text-ink" },
-  charged: { label: "Charged", tone: "text-go" },
+  held: { label: card ? "Held" : "In — nothing paid yet", tone: "text-ink" },
+  capturing: { label: card ? "Charging" : "Closing", tone: "text-ink" },
+  awaiting_payment: { label: "Cleared — pay now", tone: "text-stamp" },
+  charged: { label: card ? "Charged" : "Paid", tone: "text-go" },
   refunded: { label: "Refunded", tone: "text-ink-3" },
   released: { label: "Released", tone: "text-ink-3" },
-  failed: { label: "Card declined", tone: "text-stamp" },
+  failed: { label: card ? "Card declined" : "Not paid", tone: "text-stamp" },
 };
 
 const REASON: Record<string, string> = {
   left: "You left",
-  missed_quorum: "Missed quorum — nobody charged",
+  missed_quorum: "Missed quorum — nobody paid",
   canceled: "Drop cancelled",
   never_confirmed: "Card never confirmed",
   hold_expired: "Hold expired",
   card_declined: "Card declined",
+  unpaid: "Not paid in time — spot released",
 };
 
 export default async function MePage() {
@@ -38,9 +43,12 @@ export default async function MePage() {
   if (!user) redirect("/sign-in?next=/me");
   const ctx = await pageCtx();
   const [rows, crew] = await Promise.all([pledgesForUser(ctx, user.id), crewSize(ctx, user.id)]);
+  const owing = rows.filter((r) => r.pledge.status === "awaiting_payment");
   const active = rows.filter((r) => ["pending", "held", "capturing"].includes(r.pledge.status) && r.drop.status !== "failed");
-  const past = rows.filter((r) => !active.includes(r));
-  const saved = rows.filter((r) => r.pledge.status === "charged").reduce((s, r) => s + (r.drop.retailCents - (r.pledge.chargedCents ?? 0)), 0);
+  const past = rows.filter((r) => !active.includes(r) && !owing.includes(r));
+  const saved = rows
+    .filter((r) => r.pledge.status === "charged" && !r.drop.practice)
+    .reduce((s, r) => s + (r.drop.retailCents - (r.pledge.chargedCents ?? 0)), 0);
 
   return (
     <div className="mx-auto max-w-[1320px] px-4 sm:px-8 pt-10 sm:pt-14 grid gap-14">
@@ -63,6 +71,26 @@ export default async function MePage() {
         </dl>
       </header>
 
+      {owing.length ? (
+        <section className="grid gap-6" aria-labelledby="to-pay">
+          <h2 id="to-pay" className="display text-4xl">To pay · {owing.length}</h2>
+          {owing.map(({ pledge, drop }) => (
+            <div key={pledge.id} className="grid gap-3 lg:grid-cols-12 lg:items-start">
+              <div className="lg:col-span-4">
+                <p className="label text-ink-3">{drop.brand}</p>
+                <Link href={`/drops/${drop.slug}`} className="display text-3xl hover:text-stamp">
+                  {drop.item}
+                </Link>
+                {pledge.size ? <p className="label text-ink-2 mt-1">Size {pledge.size}</p> : null}
+              </div>
+              <div className="lg:col-span-8">
+                <PayBox ctx={ctx} pledge={pledge} />
+              </div>
+            </div>
+          ))}
+        </section>
+      ) : null}
+
       <section className="grid gap-8 lg:grid-cols-12">
         <div className="lg:col-span-7 grid gap-4 content-start">
           <h2 className="display text-4xl">In progress</h2>
@@ -84,11 +112,15 @@ export default async function MePage() {
                       <span>
                         <span className="label text-ink-3 block">{drop.brand}</span>
                         <span className="display text-2xl block">{drop.item}</span>
-                        <span className={`label ${STATUS[pledge.status]?.tone}`}>{STATUS[pledge.status]?.label} · closes {fmtDate(drop.closesAt)}</span>
+                        <span className={`label ${STATUS[pledge.status]?.tone}`}>
+                          {drop.practice ? "Practice · " : ""}
+                          {STATUS[pledge.status]?.label} · closes {fmtDate(drop.closesAt)}
+                          {pledge.size ? ` · size ${pledge.size}` : ""}
+                        </span>
                       </span>
                       <span className="text-right font-mono text-sm num">
                         <span className="display text-stamp text-3xl block">{money(Math.min(nowPrice, pledge.heldCents))}</span>
-                        <span className="text-ink-3">held {money(pledge.heldCents)}</span>
+                        <span className="text-ink-3">{card ? "held" : "at most"} {money(pledge.heldCents)}</span>
                       </span>
                     </Link>
                   </li>
@@ -100,7 +132,7 @@ export default async function MePage() {
         <aside className="lg:col-span-5 grid gap-6 content-start">
           <div className="bg-receipt border-2 border-ink p-5 grid gap-4">
             <p className="display text-3xl">Your crew link</p>
-            <p className="text-sm text-ink-2">Anyone who joins any drop from this link counts as your crew. {user.hostStatus === "approved" ? "As a host, you earn 3% of what they buy." : ""}</p>
+            <p className="text-sm text-ink-2">Anyone who joins any drop from this link counts as your crew. {user.hostStatus === "approved" ? "As a host, your club fund earns a share of what they buy." : ""}</p>
             <CrewShare url={`${config.siteUrl}/?c=${user.crewCode}`} message="I'm in a buyers' union where the price drops the more of us join —" />
           </div>
           <div className="border border-line p-5 grid gap-3">
@@ -113,7 +145,7 @@ export default async function MePage() {
               <p className="text-ink-2">Application in review. We reply within three working days.</p>
             ) : (
               <>
-                <p className="text-ink-2">Bring a group and earn 3% of everything it buys.</p>
+                <p className="text-ink-2">Run a drop for your batch, club or fest — the club fund gets a share of everything it sells.</p>
                 <Link href="/hosts#apply" className="btn btn-sm btn-ghost justify-self-start">
                   Apply to host
                 </Link>
@@ -138,7 +170,7 @@ export default async function MePage() {
                   <span className={`label block ${STATUS[pledge.status]?.tone}`}>
                     {pledge.status === "released" ? REASON[pledge.releaseReason ?? ""] ?? "Released" : STATUS[pledge.status]?.label}
                   </span>
-                  <span className="font-mono text-sm num">{pledge.chargedCents ? money(pledge.chargedCents) : "$0"}</span>
+                  <span className="font-mono text-sm num">{pledge.status === "charged" && pledge.chargedCents && !drop.practice ? money(pledge.chargedCents) : money(0)}</span>
                 </span>
               </li>
             ))}

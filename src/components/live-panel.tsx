@@ -2,12 +2,13 @@
 
 import { Check, Lightning, SignOut, UsersThree } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError, post } from "@/lib/api-client";
 import type { Tier } from "@/lib/db/schema";
 import type { LiveState } from "@/lib/drops";
 import { fmtRemaining, relTime } from "@/lib/format";
-import { money, pct } from "@/lib/money";
+import { count, money, pct } from "@/lib/money";
+import { payCopy, type PayStyle } from "@/lib/pay-copy";
 import { Countdown } from "./countdown";
 import { CrewShare } from "./crew-share";
 import { Ladder } from "./ladder";
@@ -34,6 +35,11 @@ type Props = {
   pledge: ViewerPledge;
   siteUrl: string;
   leaveGraceMinutes: number;
+  payStyle: PayStyle;
+  practice: boolean;
+  sizes: string[];
+  /** Server-rendered payment box, shown once the drop cleared and this member owes the final price. */
+  payBox?: ReactNode;
 };
 
 const POLL_MS = 8000;
@@ -73,6 +79,7 @@ export function LivePanel(props: Props) {
   const { state, refresh } = useLive(props.slug, props.initial);
   const { ladder } = state;
   const open = state.status === "live" && !state.closing;
+  const copy = payCopy(props.payStyle, props.practice);
 
   // Celebrate a tier unlock that happens while you're watching.
   const lastTier = useRef(ladder.unlockedTier);
@@ -90,7 +97,7 @@ export function LivePanel(props: Props) {
       <div className="grid gap-2">
         <div className="flex items-center gap-2 label text-ink-2">
           {open ? <span className="live-dot" aria-hidden /> : null}
-          <span>{headline(state)}</span>
+          <span>{headline(state, copy)}</span>
         </div>
         <div className="flex items-end gap-4 flex-wrap">
           <span key={shownPrice} className="display text-stamp num text-[5.5rem] sm:text-[7rem] leading-[0.78] rise">
@@ -111,7 +118,7 @@ export function LivePanel(props: Props) {
       <Ladder tiers={props.tiers} members={ladder.members} unlockedTier={ladder.unlockedTier} />
 
       <dl className="grid grid-cols-3 border-y border-line divide-x divide-line">
-        <Stat label="Members" value={ladder.members.toLocaleString("en-US")} />
+        <Stat label="Members" value={count(ladder.members)} />
         <Stat
           label={ladder.next ? "Next tier" : "Tier"}
           value={ladder.next ? `${ladder.next.needed} more` : "Floor"}
@@ -140,11 +147,11 @@ export function LivePanel(props: Props) {
   );
 }
 
-function headline(s: LiveState) {
+function headline(s: LiveState, copy: ReturnType<typeof payCopy>) {
   if (s.status === "succeeded") return "Cleared — final price";
-  if (s.status === "failed") return "Missed quorum — nobody charged";
-  if (s.status === "canceled") return "Cancelled — every hold released";
-  if (s.closing || s.status === "settling") return "Closing — settling holds";
+  if (s.status === "failed") return copy.missed;
+  if (s.status === "canceled") return copy.canceled;
+  if (s.closing || s.status === "settling") return copy.closing;
   if (!s.ladder.quorumMet) return "Opening price — needs quorum";
   return "Everyone pays, right now";
 }
@@ -203,13 +210,21 @@ function JoinFlow(props: Props & { state: LiveState; open: boolean; onChange: ()
   // Same lag for the crew code: take it straight from the sign-in response, so the
   // very first link a new member copies already credits them.
   const [crewCode, setCrewCode] = useState(props.viewer.crewCode);
+  const [size, setSize] = useState<string | null>(null);
   const holdCents = props.state.ladder.holdCents;
+  const copy = payCopy(props.payStyle, props.practice);
+  const needsSize = props.sizes.length > 0;
 
   const join = useCallback(async () => {
+    if (needsSize && !size) {
+      setStage({ kind: "error", message: "Pick your size first." });
+      return;
+    }
     setStage({ kind: "joining" });
     try {
       const r = await post<{ pledgeId: string; status: string; clientSecret: string | null; holdCents: number; publishableKey: string | null }>(
         `/api/drops/${props.slug}/join`,
+        { size },
       );
       if (r.status === "held") {
         setPledge({ id: r.pledgeId, status: "held", heldCents: r.holdCents, chargedCents: null, canLeave: true });
@@ -225,7 +240,7 @@ function JoinFlow(props: Props & { state: LiveState; open: boolean; onChange: ()
       if (err instanceof ApiError && err.code === "signed_out") setStage({ kind: "signin" });
       else setStage({ kind: "error", message: err instanceof ApiError ? err.message : "Couldn't join. Try again." });
     }
-  }, [props, router]);
+  }, [props, router, needsSize, size]);
 
   async function confirmHold(pledgeId: string, cents: number) {
     try {
@@ -266,6 +281,9 @@ function JoinFlow(props: Props & { state: LiveState; open: boolean; onChange: ()
     ? `I'm in on the ${props.brand} ${props.item} drop. ${next.needed} more and it's ${money(next.priceCents)} for all of us —`
     : `${props.brand} ${props.item} is at its lowest price (${money(props.state.ladder.priceCents ?? holdCents)}) —`;
 
+  // Cleared, and this member owes the final price.
+  if (pledge?.status === "awaiting_payment" && props.payBox) return <>{props.payBox}</>;
+
   // Already a member
   if (pledge && ["held", "capturing", "charged", "pending"].includes(pledge.status)) {
     const charged = pledge.status === "charged";
@@ -279,12 +297,13 @@ function JoinFlow(props: Props & { state: LiveState; open: boolean; onChange: ()
             <p className="display text-3xl">{charged ? "You're in — it cleared" : "You're in"}</p>
             <p className="text-ink-2 mt-1">
               {charged
-                ? `Charged ${money(pledge.chargedCents ?? 0)}. Production has started.`
-                : `Hold: ${money(pledge.heldCents)} — the most you can pay. You'll be charged the closing price${
-                    props.state.ladder.priceCents !== null && props.state.ladder.priceCents < pledge.heldCents
-                      ? `, currently ${money(props.state.ladder.priceCents)}`
-                      : ""
-                  }.`}
+                ? props.practice
+                  ? `Practice drop cleared at ${money(pledge.chargedCents ?? 0)}. On a real drop, you'd pay that now.`
+                  : `Paid ${money(pledge.chargedCents ?? 0)}. Production has started.`
+                : copy.memberLine(
+                    money(pledge.heldCents),
+                    props.state.ladder.priceCents !== null && props.state.ladder.priceCents < pledge.heldCents ? money(props.state.ladder.priceCents) : null,
+                  )}
             </p>
           </div>
         </div>
@@ -296,7 +315,7 @@ function JoinFlow(props: Props & { state: LiveState; open: boolean; onChange: ()
             <CrewShare url={crewUrl} message={shareMessage} />
             {pledge.canLeave ? (
               <button type="button" onClick={leave} disabled={leaving} className="justify-self-start text-sm text-ink-3 hover:text-stamp underline inline-flex items-center gap-1">
-                <SignOut size={14} /> {leaving ? "Leaving…" : "Leave this drop and release my hold"}
+                <SignOut size={14} /> {leaving ? "Leaving…" : copy.leave}
               </button>
             ) : (
               <p className="text-xs text-ink-3">
@@ -337,17 +356,42 @@ function JoinFlow(props: Props & { state: LiveState; open: boolean; onChange: ()
         </div>
       ) : (
         <>
+          {needsSize ? (
+            <fieldset className="grid gap-2">
+              <legend className="label text-ink-2 mb-2">Your size</legend>
+              <div className="flex flex-wrap gap-2">
+                {props.sizes.map((s) => (
+                  <label key={s} className={`size-chip ${size === s ? "is-on" : ""}`}>
+                    <input
+                      type="radio"
+                      name="size"
+                      value={s}
+                      className="sr-only"
+                      checked={size === s}
+                      onChange={() => {
+                        setSize(s);
+                        if (stage.kind === "error") setStage({ kind: "idle" });
+                      }}
+                    />
+                    {s}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
           <button
             type="button"
             className="btn btn-stamp w-full text-2xl min-h-16"
             disabled={stage.kind === "joining"}
-            onClick={() => (signedIn ? join() : setStage({ kind: "signin" }))}
+            onClick={() => {
+              if (needsSize && !size) setStage({ kind: "error", message: "Pick your size first." });
+              else if (signedIn) void join();
+              else setStage({ kind: "signin" });
+            }}
           >
-            {stage.kind === "joining" ? "Placing hold…" : `Join — hold ${money(holdCents)}`}
+            {stage.kind === "joining" ? copy.joining : copy.joinCta(money(holdCents))}
           </button>
-          <p className="text-sm text-ink-2">
-            Your card is held, never charged, until the drop closes. Then you pay the closing price — {money(holdCents)} at most, less if more people join.
-          </p>
+          <p className="text-sm text-ink-2">{copy.underCta(money(holdCents))}</p>
         </>
       )}
       {stage.kind === "error" ? (

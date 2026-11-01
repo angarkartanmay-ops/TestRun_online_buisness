@@ -1,4 +1,5 @@
 import "server-only";
+import { CURRENCY } from "./money";
 
 /**
  * Runtime configuration, read once. Every integration degrades to a safe local
@@ -37,7 +38,23 @@ export const config = {
   stripeSecretKey: env("STRIPE_SECRET_KEY"),
   stripePublishableKey: env("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"),
   stripeWebhookSecret: env("STRIPE_WEBHOOK_SECRET"),
-  currency: (env("CURRENCY") ?? "usd").toLowerCase(),
+  /** Set with NEXT_PUBLIC_CURRENCY (default inr) so the browser formats prices the same way. */
+  currency: CURRENCY,
+  /**
+   * Pay-after-close collection. With a UPI ID, members get a UPI link + QR for the
+   * final price when a drop clears. With Razorpay keys, they get a Razorpay
+   * payment link instead, and the webhook marks them paid automatically.
+   */
+  upiVpa: env("UPI_VPA"),
+  upiPayeeName: env("UPI_PAYEE_NAME") ?? "QUORUM",
+  razorpayKeyId: env("RAZORPAY_KEY_ID"),
+  razorpayKeySecret: env("RAZORPAY_KEY_SECRET"),
+  razorpayWebhookSecret: env("RAZORPAY_WEBHOOK_SECRET"),
+  /** Consumer Protection (E-Commerce) Rules 2020: a named grievance officer. */
+  grievanceName: env("GRIEVANCE_NAME"),
+  grievanceEmail: env("GRIEVANCE_EMAIL"),
+  sellerName: env("SELLER_NAME"),
+  sellerAddress: env("SELLER_ADDRESS"),
   resendApiKey: env("RESEND_API_KEY"),
   emailFrom: env("EMAIL_FROM") ?? "QUORUM <onboarding@resend.dev>",
   cronSecret: env("CRON_SECRET"),
@@ -45,20 +62,29 @@ export const config = {
   isProduction: process.env.NODE_ENV === "production",
 };
 
+const collects = Boolean(config.upiVpa || (config.razorpayKeyId && config.razorpayKeySecret));
+
 export const modes = {
-  /** No Stripe key: holds are simulated and no card is ever touched. */
-  payments: config.stripeSecretKey ? ("stripe" as const) : ("demo" as const),
+  /**
+   * stripe: card holds, captured at close (US/UK).
+   * commit: pay after close — joining is a promise; members pay the final price by UPI or a payment link (India).
+   * demo: nothing is ever paid; used when neither is configured.
+   */
+  payments: config.stripeSecretKey ? ("stripe" as const) : collects ? ("commit" as const) : ("demo" as const),
   email: config.resendApiKey ? ("resend" as const) : ("console" as const),
   database: config.databaseUrl ? ("postgres" as const) : ("pglite" as const),
 };
 
 /**
  * Sign-in codes are shown on screen only when nothing real is at stake: payments
- * are simulated AND there is no email provider to deliver the code. With live
- * Stripe keys and no email provider, sign-in fails closed instead.
+ * are simulated AND there is no email provider to deliver the code. With real
+ * payments (Stripe or pay-after-close) and no email provider, sign-in fails closed.
  */
 export const showLoginCodeOnScreen = modes.payments === "demo" && modes.email === "console";
 
 export const isDemo = modes.payments === "demo";
+
+/** How members pay: a card hold now ("card"), or the final price after close ("later"). */
+export const payStyle = modes.payments === "stripe" ? ("card" as const) : ("later" as const);
 
 export { rules } from "./rules";

@@ -1,7 +1,14 @@
 export type HoldStatus = "requires_confirmation" | "held" | "captured" | "canceled" | "failed";
 
+export type PaymentMode = "stripe" | "demo" | "commit";
+
 export interface Payments {
-  readonly mode: "stripe" | "demo";
+  /**
+   * stripe: a real card hold, captured at close. demo: simulated, nothing moves.
+   * commit: pay after close — the "hold" is only a recorded promise; at close the
+   * member is asked for the final price (see settle.ts), so capture is a no-op.
+   */
+  readonly mode: PaymentMode;
   /** Place an authorisation-only hold. Demo holds succeed immediately. */
   createHold(args: {
     amountCents: number;

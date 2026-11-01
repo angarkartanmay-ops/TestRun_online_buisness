@@ -1,4 +1,5 @@
-import type { Tier } from "./db/schema";
+import type { DropKind, Tier } from "./db/schema";
+import { rules } from "./rules";
 
 /**
  * Pure price-ladder math, shared by the server (what we charge) and the browser
@@ -67,8 +68,30 @@ export function ladderState(tiers: readonly Tier[], members: number, unlockedTie
   };
 }
 
+export type TierMargin = { index: number; exTaxCents: number; netCents: number; marginBps: number };
+
+/**
+ * House-drop margin per tier: the GST-inclusive price, less GST, the gateway fee,
+ * the club fund's share and the unit cost at that tier's quantity. This is what
+ * keeps a ladder from being priced below what it costs to make — the trap where a
+ * mid tier is priced at bulk rates but still produced at small-batch cost.
+ */
+export function tierMargins(tiers: readonly Tier[], hostShareBps: number): TierMargin[] {
+  return tiers.map((t, index) => {
+    const exTax = Math.round((t.priceCents * 10_000) / (10_000 + rules.gstBps));
+    const fees = Math.round((t.priceCents * (rules.gatewayBps + hostShareBps)) / 10_000);
+    const net = exTax - fees - (t.costCents ?? 0);
+    return { index, exTaxCents: exTax, netCents: net, marginBps: exTax > 0 ? Math.round((net * 10_000) / exTax) : 0 };
+  });
+}
+
 /** Problems with a ladder, phrased for the person fixing it. Empty array = valid. */
-export function validateTiers(tiers: readonly Tier[], retailCents: number, maxFirstTier: number): string[] {
+export function validateTiers(
+  tiers: readonly Tier[],
+  retailCents: number,
+  maxFirstTier: number,
+  opts: { kind?: DropKind; hostShareBps?: number } = {},
+): string[] {
   const errors: string[] = [];
   if (tiers.length < 2) errors.push("Add at least two tiers — one tier is just a price.");
   if (tiers.length > 6) errors.push("Keep it to six tiers or fewer; nobody reads a longer ladder.");
@@ -87,6 +110,21 @@ export function validateTiers(tiers: readonly Tier[], retailCents: number, maxFi
   }
   if (first && first.priceCents >= retailCents) {
     errors.push("Tier 1 must already beat the retail price, or there's no reason to join.");
+  }
+  if (opts.kind === "house") {
+    const missing = tiers.findIndex((t) => !Number.isInteger(t.costCents) || (t.costCents ?? 0) <= 0);
+    if (missing >= 0) {
+      errors.push(`Tier ${missing + 1}: enter the unit cost at that quantity (making + delivery). House drops can't be priced without it.`);
+    } else {
+      const min = rules.minMarginBps;
+      for (const m of tierMargins(tiers, opts.hostShareBps ?? rules.houseHostShareBps)) {
+        if (m.marginBps < min) {
+          errors.push(
+            `Tier ${m.index + 1}: only ${(m.marginBps / 100).toFixed(1)}% margin after GST, gateway, club fund and cost — keep at least ${min / 100}%. Raise the price, or move the tier to where the factory price drops.`,
+          );
+        }
+      }
+    }
   }
   return errors;
 }

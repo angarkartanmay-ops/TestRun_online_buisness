@@ -4,39 +4,52 @@ import { ChatPreview } from "@/components/chat-preview";
 import { DropCard } from "@/components/drop-card";
 import { HeroDial } from "@/components/hero-dial";
 import { Receipt } from "@/components/receipt";
-import { config } from "@/lib/config";
+import { config, payStyle } from "@/lib/config";
+import { liveBoard } from "@/lib/board";
 import { listDrops } from "@/lib/drops";
-import { money } from "@/lib/money";
+import { CURRENCY, money } from "@/lib/money";
 import { rules } from "@/lib/rules";
 import { pageCtx } from "@/lib/server-ctx";
-import { unionStats } from "@/lib/stats";
+
+const card = payStyle === "card";
+const unit = CURRENCY === "inr" ? "rupee" : "cent";
 
 const BYLAWS: [string, string][] = [
   ["The price only falls.", "Once a tier unlocks it can't re-lock. If people leave, the price you were promised stays."],
-  ["No quorum, no drop.", "Below the first tier nothing is made and every hold is released. Scarcity here is arithmetic, not marketing."],
-  ["Every drop names its factory.", "Mill, city, country — on the drop. If a brand won't name the maker, the drop doesn't run."],
-  ["8%, shown as 8%.", "Our fee is a line on the receipt. Nothing hidden in shipping, handling or currency spread."],
+  [
+    "No quorum, no drop.",
+    card
+      ? "Below the first tier nothing is made and every hold is released. Scarcity here is arithmetic, not marketing."
+      : `Below the first tier nothing is made and nobody pays a ${unit}. Scarcity here is arithmetic, not marketing.`,
+  ],
+  ["Every drop names its factory.", "Mill, city, state — on the drop. If we can't name the maker, the drop doesn't run."],
+  [`Every ${unit}, on the receipt.`, "Blank, print, courier, GST, the gateway, the club fund and our margin — each is a line. Nothing hidden in “handling”."],
   ["Ships by the date, or a full refund.", "Every drop prints a ship-by date. Miss it and you're refunded without asking."],
   ["Membership is free, forever.", "No subscription, no paid tier, no early access. We earn only when a drop clears."],
 ];
 
 const FAQ: [string, string][] = [
-  ["When am I actually charged?", "When the drop closes. Joining places a hold on your card at the current price — the most you can pay. At close we charge the final price, which is equal or lower, and your bank releases the rest. Join at $41, close at $23: you pay $23."],
-  ["What if the drop misses quorum?", "Every hold is released, nothing is made, and we email you. You're never charged for a drop that didn't run."],
+  card
+    ? ["When am I actually charged?", `When the drop closes. Joining places a hold on your card at the current price — the most you can pay. At close we charge the final price, which is equal or lower, and your bank releases the rest. Join at ${money(104900)}, close at ${money(79900)}: you pay ${money(79900)}.`]
+    : ["When do I pay?", `After the drop closes — never before. Joining is a promise to buy at the final price. If the drop reaches its first tier, everyone gets one link to pay that final price by UPI within ${rules.payWindowHours} hours. Join at ${money(104900)}, close at ${money(79900)}: you pay ${money(79900)}.`],
+  card
+    ? ["What if the drop misses quorum?", "Every hold is released, nothing is made, and we email you. You're never charged for a drop that didn't run."]
+    : ["What if the drop misses quorum?", "Nothing happens. Nothing is made, no money ever moved, and there's nothing to refund. We email you to say so."],
   ["Can I change my mind?", `Yes, freely, until the drop reaches quorum — and for ${rules.leaveGraceMinutes} minutes after you join. After that your spot is part of what's holding everyone's price down, so you're locked in.`],
   ["Why does it take weeks to ship?", "Because nothing exists until the drop clears — that's why there's no unsold stock to pay for. Each drop prints its ship-by date. If we miss it, you get a full refund without asking."],
-  ["Why is a drop so short?", `Card holds expire after 7 days, so drops run ${rules.defaultWindowHours} hours by default and never more than ${rules.maxWindowHours / 24} days. Short windows also keep it a group decision, not a background tab.`],
+  ["Who runs a drop?", "A host — a batch rep, a club, a fest crew, a group of friends. They pick the design, share the link, and their club fund gets a share of what the drop sells. We make it, deliver it and publish the receipt."],
   ["Do you read my group chat?", "No. There's no bot and no integration. Your link carries a short code; we count the code. Your chat stays your chat."],
 ];
 
 export default async function Home() {
   const ctx = await pageCtx();
-  const [live, cleared, stats] = await Promise.all([listDrops(ctx.db, ["live"]), listDrops(ctx.db, ["succeeded"]), unionStats(ctx.db)]);
+  const live = await liveBoard(ctx);
+  const cleared = await listDrops(ctx.db, ["succeeded"]);
   const now = ctx.now();
   const featured = live.find((d) => d.ladder.next && d.ladder.quorumMet) ?? live[0];
   const chatDrop = live.find((d) => d.slug.includes("tee")) ?? featured;
   const receipt = cleared.find((d) => d.receipt.length > 0);
-  const tickerItems = live.map((d) => `${d.brand} · ${d.members} in · ${money(d.ladder.priceCents ?? d.tiers[0]!.priceCents)}`);
+  const tickerItems = live.map((d) => `${d.brand} · ${d.members} in · ${money(d.ladder.priceCents ?? d.tiers[0]!.priceCents)}${d.practice ? " · practice" : ""}`);
 
   return (
     <>
@@ -50,22 +63,22 @@ export default async function Home() {
             <span className="block">Alone you pay retail.</span> <span className="block text-stamp">Together you pay the mill.</span>
           </h1>
           <p className="mt-6 text-lg sm:text-xl text-ink-2 max-w-[52ch] leading-relaxed">
-            Pick a drop. Bring the group chat. Every person who joins pushes the price down for everyone — including the people who joined first. Then we publish the whole receipt.
+            Batch hoodies, fest tees, club merch. Bring the group chat — every person who joins pushes the price down for everyone, including the people who joined first. {card ? "" : "Nobody pays until it closes. "}Then we publish the whole receipt.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/drops" className="btn btn-stamp">
-              See {stats.live} open drops <ArrowRight weight="bold" size={20} />
+              {live.length ? "See the board" : "See past drops"} <ArrowRight weight="bold" size={20} />
             </Link>
             <Link href="#how" className="btn btn-ghost">
               How a drop works
             </Link>
           </div>
-          <dl className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-y-6 border-t border-line pt-6">
+          <dl className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-6 border-t border-line pt-6">
             {[
-              ["Members", stats.members.toLocaleString("en-US")],
-              ["Drops cleared", String(stats.cleared)],
-              ["Avg. kept / order", money(stats.avgKeptCents)],
-              ["Our cut", `${rules.feeBps / 100}%`],
+              ["Opens at", "15 people"],
+              ["Club fund", `${rules.houseHostShareBps / 100}%`],
+              ["You pay", card ? "at close" : "after close"],
+              ["Receipt", "published"],
             ].map(([k, v]) => (
               <div key={k}>
                 <dt className="label text-ink-3">{k}</dt>
@@ -107,15 +120,34 @@ export default async function Home() {
             All drops <ArrowRight size={14} />
           </Link>
         </div>
-        <div className="rail overflow-x-auto">
-          <div className="flex gap-5 px-4 sm:px-8 pb-2 w-max mx-auto max-w-none">
-            {live.slice(0, 6).map((d) => (
-              <div key={d.id} className="w-[19rem] sm:w-[21rem] shrink-0">
-                <DropCard drop={d} now={now} />
-              </div>
-            ))}
+        {live.length ? (
+          <div className="rail overflow-x-auto">
+            <div className="flex gap-5 px-4 sm:px-8 pb-2 w-max mx-auto max-w-none">
+              {live.slice(0, 6).map((d) => (
+                <div key={d.id} className="w-[19rem] sm:w-[21rem] shrink-0">
+                  <DropCard drop={d} now={now} />
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="mx-auto max-w-[1320px] px-4 sm:px-8">
+            <div className="border-2 border-dashed border-line p-8 sm:p-10 grid gap-4 justify-items-start">
+              <p className="display text-3xl">Nothing open right now.</p>
+              <p className="text-ink-2 max-w-[52ch]">
+                The next drop opens when a group starts one. Got a batch, a club or a fest crew that needs merch? Start it — fifteen people is enough to open a drop.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link href="/hosts" className="btn btn-sm btn-stamp">
+                  <HandCoins size={18} /> Start a drop
+                </Link>
+                <Link href="/receipts" className="btn btn-sm btn-ghost">
+                  Past receipts
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* HOW — a real sequence, so it's numbered */}
@@ -124,14 +156,20 @@ export default async function Home() {
           <div className="lg:col-span-4 lg:sticky lg:top-24 self-start">
             <p className="label text-ink-2">How a drop clears</p>
             <h2 className="display text-5xl sm:text-6xl mt-2">Four steps. One is waiting.</h2>
-            <p className="mt-5 text-ink-2 max-w-[38ch]">Group buying isn&apos;t new. Doing it without punishing the first people in — and without hiding the margin — is.</p>
+            <p className="mt-5 text-ink-2 max-w-[38ch]">
+              Group orders aren&apos;t new — someone always fronts the money, chases payments on WhatsApp and gets stuck with spare sizes. This is the version where nobody does.
+            </p>
           </div>
           <ol className="lg:col-span-8 divide-y divide-line border-y border-line">
             {[
-              [UsersThree, "Someone opens a drop", "A host — a Discord, a run club, a class chat — picks the item with the brand. The ladder is set so one group chat can open it."],
-              [Lock, "You join with a hold, not a charge", "Your card is authorised at the current price. That's your ceiling. Nothing moves until the drop closes."],
+              [UsersThree, "Someone opens a drop", "A host — a batch rep, a club, a fest crew — picks the design. The ladder is set so one group chat can open it: fifteen people, sometimes five."],
+              card
+                ? [Lock, "You join with a hold, not a charge", "Your card is authorised at the current price. That's your ceiling. Nothing moves until the drop closes."]
+                : [Lock, "You join with a promise, not a payment", "Pick your size and you're in at the current price — your ceiling. No money moves until the drop closes."],
               [TrendDown, "Every join pushes the price down for everyone", "Cross a tier and the new price applies to every member — first in included. Unlocked tiers never re-lock."],
-              [Factory, "It closes, we charge the floor you reached, it gets made", "Capture at the final price, release the rest. The factory makes exactly the number ordered — no warehouse, no markdown bin."],
+              card
+                ? [Factory, "It closes, we charge the floor you reached, it gets made", "Capture at the final price, release the rest. The factory makes exactly the number ordered — no warehouse, no spare sizes."]
+                : [Factory, "It closes, everyone pays the floor you reached, it gets made", "One UPI link each, for the final price. The factory makes exactly the sizes ordered and ships them to campus — no spare stock, no one out of pocket."],
             ].map(([Icon, title, body], i) => {
               const I = Icon as typeof Lock;
               return (
@@ -170,7 +208,7 @@ export default async function Home() {
                 Screenshot, &ldquo;should I get this,&rdquo; verdict — that&apos;s how buying already works. So every member gets a link, and the link&apos;s preview shows the live price and how many more people it needs. Paste it once; it updates itself.
               </p>
               <p className="mt-4 text-ink-2 max-w-[48ch]">
-                We don&apos;t buy ads. Hosts who bring a group get {rules.hostShareBps / 100}% of what it buys, out of our {rules.feeBps / 100}% — that&apos;s the whole marketing budget.
+                We don&apos;t buy ads. The club or crew that hosts a drop gets {rules.houseHostShareBps / 100}% of what it sells for its fund — that&apos;s the whole marketing budget.
               </p>
               <Link href="/hosts" className="btn btn-sm btn-ghost mt-7">
                 <HandCoins size={18} /> Host a drop
@@ -189,7 +227,7 @@ export default async function Home() {
               lines={receipt.receipt}
               totalLabel={`You paid, at ${receipt.members}`}
               retailCents={receipt.retailCents}
-              footer={`Cleared ${receipt.members} members · published unedited`}
+              footer={`Cleared ${receipt.members} members · published unedited${receipt.practice ? " · practice drop" : ""}`}
             />
           </div>
           <div className="lg:col-span-6 lg:col-start-7 lg:pt-8">
@@ -198,7 +236,7 @@ export default async function Home() {
             </p>
             <h2 className="display text-5xl sm:text-6xl mt-2">The {money(receipt.retailCents - (receipt.finalPriceCents ?? 0))} was never craftsmanship.</h2>
             <p className="mt-5 text-lg text-ink-2 max-w-[50ch]">
-              A guaranteed, pre-paid order deletes the wholesale markup, the retail markup, the unsold-stock reserve and the ad budget. It doesn&apos;t remove a cent of material or labour — the mill and the sewing floor are paid the same either way. That&apos;s why we can print this.
+              A guaranteed, pre-paid order deletes the wholesale markup, the retail markup, the spare-sizes reserve and the ad budget. It doesn&apos;t remove a rupee of fabric or labour — the mill and the print shop are paid the same either way. That&apos;s why we can print this.
             </p>
             <Link href="/receipts" className="btn btn-sm mt-7">
               All published receipts

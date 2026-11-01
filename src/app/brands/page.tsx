@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { BrandApplyForm } from "@/components/apply-forms";
 import { rules } from "@/lib/rules";
 
-export const metadata: Metadata = { title: "Run a drop", description: "Zero inventory risk, no listing fee, paid on capture. Name your factory and hold a price at volume." };
+export const metadata: Metadata = { title: "Run a drop", description: "Zero inventory risk, no listing fee, paid once members pay. Name your factory and hold a price at volume." };
 
 export default function BrandsPage() {
   return (
@@ -19,8 +19,8 @@ export default function BrandsPage() {
             ["Listing fee", "None."],
             ["The ladder", "You set it, we pressure-test it. Tier 1 must be reachable by one group chat — 25 members or fewer."],
             ["The ratchet", "An unlocked tier stays unlocked. Members who leave in their one-hour grace window don't re-raise the price."],
-            ["Payment", "70% on capture, 30% on delivery confirmation."],
-            ["Window", `${rules.defaultWindowHours} hours by default, ${rules.maxWindowHours / 24} days at most — card holds expire after 7.`],
+            ["Payment", "70% once members have paid, 30% on delivery confirmation."],
+            ["Window", `${rules.defaultWindowHours} hours by default, ${rules.maxWindowHours / 24} days at most.`],
             ["Disclosure", "Factory, city and a verified cost sheet. Published when the drop clears."],
             ["Ship-by date", "Printed on the drop. Missing it refunds every member in full."],
             ["Exclusivity", "None. Sell the same item anywhere, at any price."],

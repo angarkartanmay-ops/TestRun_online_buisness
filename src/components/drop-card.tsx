@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { DropWithLadder } from "@/lib/drops";
 import { fmtRemaining } from "@/lib/format";
-import { money, pct } from "@/lib/money";
+import { count, money, pct } from "@/lib/money";
 import { Countdown } from "./countdown";
 import { Ladder } from "./ladder";
 import { SpecimenPlate } from "./plate";
@@ -32,7 +32,10 @@ export function DropCard({ drop, now, feature = false, row = false }: { drop: Dr
       />
       <div className={`flex flex-col gap-4 flex-1 ${feature ? "p-6 lg:p-8 justify-between" : "p-4"}`}>
         <div>
-          <p className="label text-ink-2">{drop.brand}</p>
+          <p className="label text-ink-2 flex items-center gap-2">
+            {drop.brand}
+            {drop.practice ? <span className="text-stamp border border-current px-1.5 py-0.5 leading-none">Practice</span> : null}
+          </p>
           <h3 className={`display mt-1.5 group-hover:text-stamp transition-colors ${feature ? "text-5xl lg:text-6xl" : "text-[1.75rem]"}`}>
             {drop.item}
           </h3>
@@ -46,7 +49,7 @@ export function DropCard({ drop, now, feature = false, row = false }: { drop: Dr
           </div>
           <Ladder tiers={drop.tiers} members={drop.members} unlockedTier={ladder.unlockedTier} compact={!feature} />
           <div className="flex justify-between gap-3 label text-ink-2 pt-1">
-            <span className="num">{drop.members.toLocaleString("en-US")} in</span>
+            <span className="num">{count(drop.members)} in</span>
             {ladder.next ? (
               <span className="num text-ink">
                 {ladder.next.needed} more → {money(ladder.next.priceCents)}

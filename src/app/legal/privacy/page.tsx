@@ -10,7 +10,7 @@ export default function Page() {
       <h2>What we store</h2>
       <p>Your email address; a random crew code; the drops you join and what you were held and charged; who referred you (by crew code); and a session token in a cookie so you stay signed in. Sign-in codes are stored only as a keyed hash and expire after ten minutes.</p>
       <h2>What we don&apos;t</h2>
-      <p>Card numbers never touch our servers — they go directly to our payment processor, Stripe. We don&apos;t read your group chats, run ad trackers, or sell or share your data with advertisers.</p>
+      <p>Card and bank details never touch our servers — UPI payments happen in your own UPI app, and card payments go directly to our payment processor (Razorpay in India, Stripe elsewhere). We store your email, the size you picked and what you paid. We don&apos;t read your group chats, run ad trackers, or sell or share your data with advertisers.</p>
       <h2>What other members see</h2>
       <p>Drop pages show counts and anonymous activity (&ldquo;Joined from a crew link&rdquo;). Your email and name are never shown to other members. Hosts see how many members joined from their link, not who.</p>
       <h2>Cookies</h2>

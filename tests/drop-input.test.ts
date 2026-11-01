@@ -8,7 +8,7 @@ function form(over: Record<string, string> = {}) {
     category: "apparel", glyph: "tshirt", plate: "sage", imageUrl: "", retail: "88", origin: "Cut + sewn in Porto, PT",
     opensAt: "2026-10-09T12:00", windowHours: "72", shipDays: "42", resaleIndex: "",
     tiers: JSON.stringify([{ min: "12", price: "62" }, { min: "40", price: "54" }, { min: "120", price: "47" }, { min: "300", price: "41" }]),
-    receipt: "", status: "live",
+    receipt: "", status: "live", kind: "partner", hostShare: "3",
   };
   for (const [k, v] of Object.entries({ ...base, ...over })) f.set(k, v);
   return f;
@@ -22,6 +22,23 @@ describe("admin drop form", () => {
     expect(r.input.values.status).toBe("live");
     expect(r.input.values.tiers[0]).toEqual({ min: 12, priceCents: 6200 });
     expect(r.input.values.closesAt.getTime() - r.input.values.opensAt.getTime()).toBe(72 * 3600_000);
+  });
+  it("defaults to a house drop, which needs a unit cost per tier and a safe margin", () => {
+    const tiers = (cost: string[]) =>
+      JSON.stringify([{ min: "15", price: "1049", cost: cost[0] }, { min: "50", price: "899", cost: cost[1] }, { min: "100", price: "799", cost: cost[2] }]);
+    const missing = parseDropForm(form({ kind: "", hostShare: "5", retail: "1299", tiers: tiers(["", "", ""]) }));
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.errors.tiers).toMatch(/unit cost/);
+
+    const thin = parseDropForm(form({ kind: "house", hostShare: "5", retail: "1299", tiers: tiers(["715", "715", "515"]) }));
+    expect(thin.ok).toBe(false);
+    if (!thin.ok) expect(thin.errors.tiers).toMatch(/Tier 2: only/);
+
+    const ok = parseDropForm(form({ kind: "house", hostShare: "5", retail: "1299", tiers: tiers(["715", "590", "515"]), sizes: "s, m, l , m" }));
+    expect(ok.ok).toBe(true);
+    if (!ok.ok) return;
+    expect(ok.input.values).toMatchObject({ kind: "house", hostShareBps: 500, feeBps: 0, sizes: ["S", "M", "L"], countryOfOrigin: "India", practice: false });
+    expect(ok.input.values.tiers[1]).toEqual({ min: 50, priceCents: 89900, costCents: 59000 });
   });
   it("refuses a window longer than a card hold lasts", () => {
     const r = parseDropForm(form({ windowHours: "200" }));
