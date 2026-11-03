@@ -6,7 +6,7 @@ import { mails } from "@/lib/email";
 import { commitPayments } from "@/lib/payments/commit";
 import { paidPledgeId, razorpayClient, verifyRazorpaySignature, type RazorpayClient } from "@/lib/payments/razorpay";
 import { joinDrop, leavePledge } from "@/lib/pledges";
-import { claimPaid, closeCollection, economics, markPaid, settleDrop, upiFor } from "@/lib/settle";
+import { claimPaid, closeCollection, economics, markPaid, overdueDrops, settleDrop, upiFor } from "@/lib/settle";
 import { tierMargins, validateTiers } from "@/lib/tiers";
 import { payRef, upiLink } from "@/lib/upi";
 import { createHmac } from "node:crypto";
@@ -112,6 +112,51 @@ describe("pay after close", () => {
     expect(payout).toMatchObject({ hostUserId: host.id, members: 4, volumeCents: 4 * 89900, amountCents: Math.round(4 * 89900 * 0.05) });
     // The price stays where the group put it.
     expect((await getDrop(ctx.db, drop.id))!.finalPriceCents).toBe(89900);
+  });
+
+  it("records the club fund's payout when the last member pays, with no need to close payments", async () => {
+    const { ctx, advance } = await commitCtx();
+    const host = await makeUser(ctx);
+    await ctx.db.update(users).set({ hostStatus: "approved" }).where(eq(users.id, host.id));
+    const drop = await makeDrop(ctx, { tiers: HOODIE, retailCents: 129900, kind: "house", hostShareBps: 500, hostUserId: host.id });
+    const members = await join(ctx, drop.slug, 4);
+    advance(73 * H);
+    await settleDrop(ctx, drop.id);
+    for (const m of members.slice(0, 3)) await markPaid(ctx, m.pledgeId);
+    expect(await ctx.db.select().from(payouts)).toHaveLength(0); // one still owes
+    await markPaid(ctx, members[3]!.pledgeId);
+    const [payout] = await ctx.db.select().from(payouts);
+    expect(payout).toMatchObject({ hostUserId: host.id, members: 4, volumeCents: 4 * 104900, amountCents: Math.round(4 * 104900 * 0.05) });
+  });
+
+  it("accepts a late UPI payment from someone released as unpaid instead of keeping their money and their spot", async () => {
+    const { ctx, advance } = await commitCtx();
+    const drop = await makeDrop(ctx, { tiers: HOODIE, retailCents: 129900 });
+    const members = await join(ctx, drop.slug, 4);
+    advance(73 * H);
+    await settleDrop(ctx, drop.id);
+    for (const m of members.slice(0, 3)) await markPaid(ctx, m.pledgeId);
+    await closeCollection(ctx, drop.id);
+    const [out] = await ctx.db.select().from(pledges).where(eq(pledges.id, members[3]!.pledgeId));
+    expect(out).toMatchObject({ status: "failed", releaseReason: "unpaid" });
+
+    expect(await markPaid(ctx, members[3]!.pledgeId)).toBe(true);
+    const [back] = await ctx.db.select().from(pledges).where(eq(pledges.id, members[3]!.pledgeId));
+    expect(back).toMatchObject({ status: "charged", chargedCents: 104900, releaseReason: null });
+    expect(await markPaid(ctx, members[3]!.pledgeId)).toBe(false);
+  });
+
+  it("never calls a practice drop overdue", async () => {
+    const { ctx, advance } = await commitCtx();
+    const practice = await makeDrop(ctx, { practice: true });
+    const real = await makeDrop(ctx);
+    await join(ctx, practice.slug, 3);
+    await join(ctx, real.slug, 3);
+    advance(73 * H);
+    await settleDrop(ctx, practice.id);
+    await settleDrop(ctx, real.id);
+    advance(50 * 86400_000);
+    expect((await overdueDrops(ctx)).map((d) => d.id)).toEqual([real.id]);
   });
 
   it("uses a Razorpay payment link when configured, and falls back to UPI if creating one fails", async () => {

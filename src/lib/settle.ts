@@ -182,17 +182,36 @@ export function upiFor(ctx: Ctx, p: Pick<Pledge, "id" | "chargedCents">): string
 /**
  * Admin (or the Razorpay webhook): this member has paid. Idempotent — a second
  * call, or a webhook retry, does nothing.
+ *
+ * Also accepts a member whose spot was released as unpaid: UPI can't be stopped
+ * at the deadline, so a late payment must not leave someone with their money
+ * taken and no order. The price they owe is already fixed, so nothing else moves.
+ *
+ * When the last owed payment lands, the club fund's payout is recorded — there
+ * is no "Close payments" button once nobody is left to chase.
  */
 export async function markPaid(ctx: Ctx, pledgeId: string): Promise<boolean> {
   const [p] = await ctx.db
     .update(pledges)
-    .set({ status: "charged", settledAt: ctx.now(), updatedAt: ctx.now() })
-    .where(and(eq(pledges.id, pledgeId), eq(pledges.status, "awaiting_payment")))
+    .set({ status: "charged", releaseReason: null, settledAt: ctx.now(), updatedAt: ctx.now() })
+    .where(
+      and(
+        eq(pledges.id, pledgeId),
+        or(eq(pledges.status, "awaiting_payment"), and(eq(pledges.status, "failed"), eq(pledges.releaseReason, "unpaid"))),
+      ),
+    )
     .returning();
   if (!p) return false;
   const drop = await getDrop(ctx.db, p.dropId);
   const [u] = await ctx.db.select({ email: users.email }).from(users).where(eq(users.id, p.userId)).limit(1);
   if (drop && u) await deliver(ctx, mails.paid(ctx, u.email, drop, p.chargedCents ?? 0, drop.shipBy));
+  if (drop) {
+    const [left] = await ctx.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(pledges)
+      .where(and(eq(pledges.dropId, drop.id), eq(pledges.status, "awaiting_payment")));
+    if ((left?.n ?? 0) === 0) await recordPayouts(ctx, drop);
+  }
   return true;
 }
 
@@ -381,9 +400,12 @@ export async function markShipped(ctx: Ctx, dropId: string) {
     .where(and(eq(drops.id, dropId), eq(drops.status, "succeeded")));
 }
 
-/** Cleared drops past their ship-by date with nothing shipped: Bylaw 5 says refund. */
+/** Cleared drops past their ship-by date with nothing shipped: Bylaw 5 says refund. Practice drops ship nothing, so they can't be late. */
 export async function overdueDrops(ctx: Ctx) {
-  const rows = await ctx.db.select().from(drops).where(and(eq(drops.status, "succeeded"), lte(drops.shipBy, ctx.now())));
+  const rows = await ctx.db
+    .select()
+    .from(drops)
+    .where(and(eq(drops.status, "succeeded"), eq(drops.practice, false), lte(drops.shipBy, ctx.now())));
   return rows.filter((d) => !d.shippedAt);
 }
 
