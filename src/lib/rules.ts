@@ -8,7 +8,7 @@ export const rules = {
   /** You can leave freely before quorum, or within this window after joining. */
   leaveGraceMinutes: 60,
   /** Partner drops: QUORUM's fee and the host's share of it, in basis points of cleared volume. */
-  feeBps: 800,
+  feeBps: 1200,
   hostShareBps: 300,
   /** House drops: the club fund's default share of what the drop sells. */
   houseHostShareBps: 500,
