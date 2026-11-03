@@ -1,0 +1,168 @@
+QUORUM - EXECUTIVE SUMMARY OF THE WHOLE CHAT
+Date: 3 Nov 2026
+Live site: https://quorum-chi-roan.vercel.app
+Repo/branch: angarkartanmay-ops/TestRun_online_buisness, tanmay/keen-bardeen-mtymxz
+
+======================================================================
+1. WHAT IT IS
+======================================================================
+QUORUM is a group-buying website. A host starts a "drop" with a price
+ladder. Every person who joins pushes the price down for everyone. The
+price only falls, never rises. The cost receipt is published.
+
+Example ladder (hoodie): 15 people = Rs 1,049 | 50 = Rs 899 | 100 = Rs 799.
+Everyone pays the final unlocked price, whenever they joined. If the first
+step is not reached, nothing is made and nobody pays.
+
+Origin: you asked for "an online business that is Gen-Z native" with a
+website. It became a buyers'-union site, then was rebuilt India-first.
+
+======================================================================
+2. WHAT WAS BUILT AND IS LIVE
+======================================================================
+- Stack: Next.js 16.4.3 on Vercel, Supabase Postgres, TypeScript,
+  Tailwind, Drizzle ORM. 66 automated tests pass; build is clean.
+- India-first: prices in Rs, IST dates, UPI payments, sizes, GST-inclusive
+  prices, country of origin, returns/grievance/terms/privacy pages
+  (drafts - need CA/lawyer review).
+- Pay-after-close: joining is a promise. When a drop clears, members get a
+  UPI link/QR or Razorpay payment link for the final price (48h window).
+  No money is held, so nothing to refund if a drop fails.
+- Two drop kinds:
+    house   - QUORUM makes the product; margin guard blocks any tier under
+              20% margin after GST, gateway and club fund.
+    partner - an outside brand makes and sells; QUORUM takes a fee.
+- Practice drops keep the board full (labelled, nobody pays).
+- Admin: pilot-gate numbers, per-drop funnel, size order sheet, mark-paid,
+  close payments, refresh practice drops.
+- Fixed along the way: DB connection host, Next.js security advisories,
+  Rs glyph in share cards, contrast failures, dead homepage, and 3 bugs
+  (payouts never recorded, practice drops tripping overdue alert, late UPI
+  payers losing their spot).
+
+======================================================================
+3. ASSESSMENT (NEED + SIMULATIONS)
+======================================================================
+Need in India: real but narrow. Campus/club/fest merch is the one clear
+fit (today it runs on WhatsApp + Google Form + a printer, with someone
+fronting cash and a 50-piece minimum).
+
+Simulation results (informed estimates, not measured data):
+- Ratchet ladder 15/50/100 clears 62% of drops vs 15% for a flat
+  50-piece minimum (about 4x more club orders become real).
+- Old 15/30/60 spacing lost money on 26% of cleared drops; fixed to
+  15/50/100 aligned with factory price breaks.
+- Marketplace at 8% fee nets about 2.6% of sales (thin, ~Rs 600/drop).
+  15% fee: ~Rs 2,200/drop. Making the merch yourself: ~Rs 2,600/drop.
+- 24-month outlook, full-time: median ~Rs 13k/month, 68% chance of
+  profit, 11% chance of Rs 1L+/month. Part-time: roughly break-even.
+- Two numbers decide everything: share of people reached who buy, and
+  unit cost. Only real pilots can measure them.
+
+VERDICT: Yes, as a cheap, time-boxed campus-merch experiment. Not yet a
+full-time bet, a fundraise or an ad budget. Cash at risk before the
+decision gate: about Rs 0-5k (samples).
+
+======================================================================
+4. COMPETITION
+======================================================================
+No direct India equivalent found (tiered, falling-price group buying for
+merch). Nearest:
+- Custom Ink, Bonfire (US) - group/campaign merch with minimums.
+- Alma Mater Store (Bengaluru) - campus merch, ~Rs 2.5 Cr FY25, flat.
+- Qikink, Printrove, Blinkstore - print-on-demand (suppliers more than
+  rivals; Qikink launched a free Creator Store, Jul 2026).
+- Shopify/WooCommerce group-buy apps.
+- The Souled Store, Bonkers Corner - big fandom/drop brands.
+- DealShare, CityMall, Meesho moved away from group buying (cautionary).
+How to outgrow them: own the campus wedge, make the ladder + receipt the
+trust story, produce under own label with margin guard, add creators and
+partner brands once demand is proven.
+
+======================================================================
+5. HOW THE PRICE DROP AND EARNINGS WORK (latest question)
+======================================================================
+Price drop: ladder steps; price at join is only a ceiling; unlocked step
+stays unlocked; everyone pays the highest step reached at close; below
+the first step nobody pays. Sellers accept it because bigger batches cut
+the factory price and each step sits where that price drops.
+
+Will Adidas/Max sell here? Not now, probably not soon (they already sell
+everywhere, protect pricing, produce in big seasonal batches, and QUORUM
+has no audience yet). This is inference, not researched fact.
+Realistic order of sellers:
+  1. QUORUM's own label (campus hoodies/tees)
+  2. Small Indian D2C brands wanting pre-orders without stock
+  3. Creators / fandom brands (partner drops)
+  4. Licensed brands, once there is an audience
+  5. Big brands, only after thousands of active members, as special runs
+
+Earnings:
+- House drop example (tee Rs 549 x 50 = Rs 27,450): GST -1,307; gateway
+  -648; club fund 5% -1,373; making+delivery -18,250; QUORUM keeps about
+  Rs 5,900 (~Rs 118/tee).
+- Partner drop (Rs 50,000 sold): 8% fee = Rs 4,000; minus 3% host share
+  and gateway leaves ~Rs 1,300. Recommend raising to ~15% for outside
+  vendors (one-line setting; NOT changed yet).
+- Money flow: members pay after close -> pay factory (usually 50% advance,
+  only from collected money) -> club fund paid by UPI after delivery ->
+  remainder is QUORUM's earnings.
+
+======================================================================
+6. ROADMAP
+======================================================================
+Phase A  Make it India/pilot-ready ............ DONE and deployed
+Phase B  Friends test (Dec 2026, ~Rs 0) ....... next
+Phase C  Campus pilots, 5 drops (Jan-Feb 2027)  one state, Razorpay links
+Phase D  Decision gate (end Feb 2027) - continue only if ALL pass:
+           >=3 of 5 drops clear | median >=25 units | >=70% pay |
+           >=Rs 80 contribution/unit | >=2 hosts want a second drop
+Phase E  If pass: register (proprietorship + Udyam, GST via CA), UPI
+         one-time mandates, domain, paid tiers only if needed.
+Phase F  Jul-Sep 2027 season: 10-20 colleges via ambassadors, creator
+         drops, later US/UK via existing Stripe path.
+If fail: sell just the group-order tool to clubs, or stop.
+
+Sourcing: under 15 = print-on-demand; 15-49 = local small-batch printer;
+50+ = Tiruppur (tees) / Ludhiana (hoodies) via IndiaMART. Order one paid
+sample first. Ship in one parcel to the host.
+
+Partner companies: Qikink/Printrove/Blinkstore (making), Razorpay
+(payments, Cashfree backup), Shiprocket/Delhivery (delivery), Resend
+(email), Unstop and fest committees (reaching colleges).
+
+======================================================================
+7. YOUR TO-DO LIST (needs a human click - not done by me)
+======================================================================
+1. Rotate secrets that appeared in chat: DB password (quorum_app role),
+   AUTH_SECRET, CRON_SECRET. Mark new values Sensitive in Vercel.
+2. Supabase SQL editor: drop extension pg_net;
+3. Vercel: connect Git auto-deploy to the repo.
+4. Set up Resend (domain + RESEND_API_KEY + EMAIL_FROM) before any real
+   payment; without it member sign-in fails closed.
+5. Set UPI_VPA for the friends test; Razorpay keys for campus pilots.
+   Run the Rs 1 smoke test (docs/DEPLOY.md step 9) first - Razorpay is
+   untested against a live account.
+6. Have a CA/lawyer review the legal pages; set SELLER_* and GRIEVANCE_*.
+7. Optional: buy a domain, set NEXT_PUBLIC_SITE_URL.
+
+======================================================================
+8. KNOWN LIMITS / NOT BUILT
+======================================================================
+- UPI payment matching, refunds, club payouts and factory orders are
+  manual. No photo upload. Emails are plain text.
+- Not built: UPI one-time mandate provider, self-serve brand onboarding
+  (only the /brands application form), brand payout automation, a
+  committed e2e suite.
+- 4 moderate audit warnings remain in dev tool drizzle-kit only.
+
+======================================================================
+9. OPEN ITEM FROM YOUR LAST MESSAGE
+======================================================================
+You ran "/import memory ... Starting a D2C apparel brand" to combine that
+idea with QUORUM. The command failed: it only accepts codex, gemini or
+cursor as sources. To bring the idea in, paste the text of that chat here
+(or the key points) and I will fold it into the plan - e.g. as the
+"house label" that QUORUM drops produce.
+
+More detail: docs/DEPLOY.md (launch checklist), docs/PILOT.md (pilot plan).
