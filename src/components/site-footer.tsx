@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ThemeToggle } from "./theme-toggle";
 
 const COLS: { title: string; links: [string, string][] }[] = [
-  { title: "The union", links: [["Open drops", "/drops"], ["Published receipts", "/receipts"], ["Bylaws", "/#bylaws"], ["My drops", "/me"]] },
+  { title: "The union", links: [["Open drops", "/drops"], ["Published receipts", "/receipts"], ["What people want", "/wants"], ["Bylaws", "/#bylaws"], ["My drops", "/me"]] },
   { title: "Build with us", links: [["Host a drop", "/hosts"], ["Brands: run a drop", "/brands"], ["Host dashboard", "/me/host"]] },
   {
     title: "Small print",

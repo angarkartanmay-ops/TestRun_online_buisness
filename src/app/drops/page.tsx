@@ -56,6 +56,9 @@ export default async function DropsPage({ searchParams }: { searchParams: Promis
           <Link href="/hosts" className="btn btn-sm mt-2">
             Open one with your group
           </Link>
+          <Link href="/wants" className="label text-ink-2 underline">
+            Or ask for a brand you want
+          </Link>
         </div>
       ) : (
         <div className="mt-10 grid gap-6">

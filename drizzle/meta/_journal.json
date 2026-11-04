@@ -15,6 +15,13 @@
       "when": 1793546345780,
       "tag": "0001_india_pilot",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793733211884,
+      "tag": "0002_demand_signals",
+      "breakpoints": true
     }
   ]
 }

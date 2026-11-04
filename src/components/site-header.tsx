@@ -13,6 +13,7 @@ export async function SiteHeader() {
         </Link>
         <nav aria-label="Main" className="ml-auto flex items-center gap-0.5 sm:gap-2">
           <NavLink href="/drops">Drops</NavLink>
+          <NavLink href="/wants">Wants</NavLink>
           <NavLink href="/receipts" desktopOnly>Receipts</NavLink>
           <NavLink href="/hosts" desktopOnly>Host</NavLink>
           {user && isAdmin(user.email) ? <NavLink href="/admin">Admin</NavLink> : null}

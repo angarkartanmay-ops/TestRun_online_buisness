@@ -209,6 +209,52 @@ export const brandApplications = pgTable("brand_applications", {
   createdAt: ts("created_at").notNull().defaultNow(),
 });
 
+export const WANT_STATUSES = ["open", "answered", "hidden"] as const;
+export type WantStatus = (typeof WANT_STATUSES)[number];
+
+/**
+ * A demand signal: "I'd buy this from this brand." No money moves. It exists to show a
+ * brand how many people in a city want something, before any drop is opened.
+ */
+export const wants = pgTable(
+  "wants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: text("slug").notNull().unique(),
+    brand: text("brand").notNull(),
+    item: text("item").notNull(),
+    note: text("note").notNull().default(""),
+    category: text("category").notNull().default("apparel"),
+    city: text("city").notNull().default("Bengaluru"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: text("status", { enum: WANT_STATUSES }).notNull().default("open"),
+    /** What the brand (or we) said back, shown on the page once the want is answered. */
+    answer: text("answer").notNull().default(""),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("wants_created_by_idx").on(t.createdBy, t.createdAt), index("wants_status_idx").on(t.status)],
+);
+
+export const wantVotes = pgTable(
+  "want_votes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    wantId: uuid("want_id")
+      .notNull()
+      .references(() => wants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The most this person would pay, in minor units. Optional. */
+    maxPriceCents: integer("max_price_cents"),
+    city: text("city").notNull().default("Bengaluru"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("want_votes_one_per_user").on(t.wantId, t.userId), index("want_votes_user_idx").on(t.userId)],
+);
+
 export const payouts = pgTable(
   "payouts",
   {
@@ -246,3 +292,4 @@ export type NewDrop = typeof drops.$inferInsert;
 export type Pledge = typeof pledges.$inferSelect;
 export type DropEvent = typeof dropEvents.$inferSelect;
 export type Payout = typeof payouts.$inferSelect;
+export type Want = typeof wants.$inferSelect;
