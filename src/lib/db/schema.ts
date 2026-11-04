@@ -205,7 +205,25 @@ export const brandApplications = pgTable("brand_applications", {
   factory: text("factory").notNull(),
   unitCostCents: integer("unit_cost_cents"),
   notes: text("notes").notNull().default(""),
-  status: text("status", { enum: ["new", "contacted", "declined"] }).notNull().default("new"),
+  status: text("status", { enum: ["new", "contacted", "approved", "declined"] }).notNull().default("new"),
+  /** Set when the applicant was signed in. Approval links the brand to this account or to `email`. */
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
+
+export const BRAND_STATUSES = ["approved", "declined"] as const;
+
+/** An approved brand account. Its owner sees demand for the brand's name and can reply to it. */
+export const brands = pgTable("brands", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  ownerUserId: uuid("owner_user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  status: text("status", { enum: BRAND_STATUSES }).notNull().default("approved"),
+  factory: text("factory").notNull().default(""),
   createdAt: ts("created_at").notNull().defaultNow(),
 });
 
@@ -293,3 +311,4 @@ export type Pledge = typeof pledges.$inferSelect;
 export type DropEvent = typeof dropEvents.$inferSelect;
 export type Payout = typeof payouts.$inferSelect;
 export type Want = typeof wants.$inferSelect;
+export type Brand = typeof brands.$inferSelect;

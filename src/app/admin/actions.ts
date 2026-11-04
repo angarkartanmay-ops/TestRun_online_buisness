@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
+import { approveBrandApplication } from "@/lib/brands";
 import { brandApplications, drops, hostApplications, payouts, users } from "@/lib/db/schema";
 import { parseDropForm } from "@/lib/drop-input";
 import { getDrop } from "@/lib/drops";
@@ -98,6 +99,7 @@ export async function reviewHost(form: FormData) {
 export async function markBrand(form: FormData) {
   await requireAdmin();
   const status = String(form.get("status")) as "new" | "contacted" | "declined";
+  if (!["new", "contacted", "declined"].includes(status)) return;
   await (await getCtx()).db.update(brandApplications).set({ status }).where(eq(brandApplications.id, String(form.get("id"))));
   revalidatePath("/admin/brands");
 }
@@ -107,4 +109,10 @@ export async function markPayoutPaid(form: FormData) {
   const ctx = await getCtx();
   await ctx.db.update(payouts).set({ status: "paid", paidAt: ctx.now() }).where(eq(payouts.id, String(form.get("id"))));
   revalidatePath("/admin/payouts");
+}
+
+export async function approveBrand(form: FormData) {
+  await requireAdmin();
+  await approveBrandApplication(await getCtx(), String(form.get("id")));
+  revalidatePath("/admin/brands");
 }

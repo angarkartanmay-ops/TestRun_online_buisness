@@ -3,7 +3,7 @@ import { brandApplications } from "@/lib/db/schema";
 import { fmtDateTime } from "@/lib/format";
 import { money } from "@/lib/money";
 import { pageCtx } from "@/lib/server-ctx";
-import { markBrand } from "../actions";
+import { approveBrand, markBrand } from "../actions";
 
 export default async function AdminBrands() {
   const ctx = await pageCtx();
@@ -22,7 +22,9 @@ export default async function AdminBrands() {
               {b.notes ? <p className="text-ink-3 text-sm mt-1 max-w-[70ch]">{b.notes}</p> : null}
             </div>
             <div className="flex gap-2 items-start">
-              {(["contacted", "declined"] as const).filter((s) => s !== b.status).map((s) => (
+              {b.status !== "approved" ? <form action={approveBrand}><input type="hidden" name="id" value={b.id} /><button className="btn btn-sm btn-stamp">Approve</button></form> : null}
+              {b.status === "approved" ? <a className="btn btn-sm btn-ghost" href={`/admin/wants/report?brand=${encodeURIComponent(b.brand)}`}>Demand report</a> : null}
+              {(["contacted", "declined"] as const).filter((s) => s !== b.status && b.status !== "approved").map((s) => (
                 <form key={s} action={markBrand}><input type="hidden" name="id" value={b.id} /><input type="hidden" name="status" value={s} /><button className="btn btn-sm btn-ghost">Mark {s}</button></form>
               ))}
             </div>

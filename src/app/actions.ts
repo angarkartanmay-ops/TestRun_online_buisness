@@ -46,8 +46,10 @@ export async function applyAsBrand(_prev: FormState, form: FormData): Promise<Fo
   const parsed = brandSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { ok: false, message: "Fix the highlighted fields.", errors: fieldErrors(parsed.error) };
   const { unitCost, notes, ...rest } = parsed.data;
+  const user = await getSessionUser();
   await (await getCtx()).db.insert(brandApplications).values({
     ...rest,
+    userId: user?.id ?? null,
     unitCostCents: typeof unitCost === "number" ? Math.round(unitCost * 100) : null,
     notes: notes ?? "",
   });
